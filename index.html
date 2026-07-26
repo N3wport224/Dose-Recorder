@@ -216,13 +216,14 @@
 'use strict';
 
 /* ================================================================
-   ADHD medications and their commonly available strengths.
-   Pre-fills the name datalist and the one-tap dose chips.
+   Medication quick-select database — ADHD meds plus other common
+   daily prescriptions and supplements, with commonly available
+   strengths. Pre-fills the name datalist and the one-tap dose chips.
    Convenience data only — NOT dosing guidance; the prescription
    label always wins. Free-text entry works for anything not listed.
    ================================================================ */
 const MED_DB = {
-  // --- Methylphenidate class ---
+  // --- ADHD: methylphenidate class ---
   'Methylphenidate IR':                  ['5mg', '10mg', '20mg'],
   'Methylphenidate ER':                  ['18mg', '27mg', '36mg', '54mg'],
   'Concerta (methylphenidate ER)':       ['18mg', '27mg', '36mg', '54mg'],
@@ -238,7 +239,7 @@ const MED_DB = {
   'Azstarys (serdexmethylphenidate)':    ['26.1/5.2mg', '39.2/7.8mg', '52.3/10.4mg'],
   'Focalin (dexmethylphenidate)':        ['2.5mg', '5mg', '10mg'],
   'Focalin XR':                          ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg', '35mg', '40mg'],
-  // --- Amphetamine class ---
+  // --- ADHD: amphetamine class ---
   'Adderall (amphetamine salts)':        ['5mg', '7.5mg', '10mg', '12.5mg', '15mg', '20mg', '30mg'],
   'Adderall XR':                         ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg'],
   'Mydayis':                             ['12.5mg', '25mg', '37.5mg', '50mg'],
@@ -250,16 +251,107 @@ const MED_DB = {
   'Adzenys XR-ODT':                      ['3.1mg', '6.3mg', '9.4mg', '12.5mg', '15.7mg', '18.8mg'],
   'Dyanavel XR (liquid)':                ['2.5mg/mL'],
   'Xelstrym (dextroamphetamine patch)':  ['4.5mg', '9mg', '13.5mg', '18mg'],
-  // --- Non-stimulants ---
+  // --- ADHD: non-stimulants ---
   'Strattera (atomoxetine)':             ['10mg', '18mg', '25mg', '40mg', '60mg', '80mg', '100mg'],
   'Qelbree (viloxazine)':                ['100mg', '150mg', '200mg'],
   'Intuniv (guanfacine ER)':             ['1mg', '2mg', '3mg', '4mg'],
   'Guanfacine IR':                       ['1mg', '2mg'],
   'Kapvay (clonidine ER)':               ['0.1mg', '0.2mg'],
   'Clonidine IR':                        ['0.1mg', '0.2mg', '0.3mg'],
-  // --- Common off-label ---
-  'Bupropion XL (Wellbutrin, off-label)': ['150mg', '300mg'],
-  'Modafinil (off-label)':               ['100mg', '200mg'],
+  'Modafinil (Provigil)':                ['100mg', '200mg'],
+  // --- Antidepressants / mood ---
+  'Sertraline (Zoloft)':                 ['25mg', '50mg', '100mg'],
+  'Fluoxetine (Prozac)':                 ['10mg', '20mg', '40mg'],
+  'Escitalopram (Lexapro)':              ['5mg', '10mg', '20mg'],
+  'Citalopram (Celexa)':                 ['10mg', '20mg', '40mg'],
+  'Paroxetine (Paxil)':                  ['10mg', '20mg', '30mg', '40mg'],
+  'Venlafaxine XR (Effexor XR)':         ['37.5mg', '75mg', '150mg'],
+  'Duloxetine (Cymbalta)':               ['20mg', '30mg', '60mg'],
+  'Bupropion SR (Wellbutrin SR)':        ['100mg', '150mg', '200mg'],
+  'Bupropion XL (Wellbutrin XL)':        ['150mg', '300mg'],
+  'Mirtazapine (Remeron)':               ['7.5mg', '15mg', '30mg', '45mg'],
+  'Trazodone':                           ['50mg', '100mg', '150mg'],
+  'Lamotrigine (Lamictal)':              ['25mg', '50mg', '100mg', '150mg', '200mg'],
+  'Lithium carbonate':                   ['300mg', '450mg', '600mg'],
+  'Quetiapine (Seroquel)':               ['25mg', '50mg', '100mg', '200mg', '300mg'],
+  'Aripiprazole (Abilify)':              ['2mg', '5mg', '10mg', '15mg', '20mg', '30mg'],
+  // --- Anxiety / nerve ---
+  'Buspirone (Buspar)':                  ['5mg', '7.5mg', '10mg', '15mg', '30mg'],
+  'Hydroxyzine (Vistaril)':              ['10mg', '25mg', '50mg'],
+  'Alprazolam (Xanax)':                  ['0.25mg', '0.5mg', '1mg', '2mg'],
+  'Clonazepam (Klonopin)':               ['0.5mg', '1mg', '2mg'],
+  'Lorazepam (Ativan)':                  ['0.5mg', '1mg', '2mg'],
+  'Diazepam (Valium)':                   ['2mg', '5mg', '10mg'],
+  'Gabapentin (Neurontin)':              ['100mg', '300mg', '400mg', '600mg', '800mg'],
+  'Pregabalin (Lyrica)':                 ['25mg', '50mg', '75mg', '100mg', '150mg'],
+  'Naltrexone':                          ['4.5mg', '25mg', '50mg'],
+  // --- Sleep ---
+  'Melatonin':                           ['1mg', '3mg', '5mg', '10mg'],
+  'Zolpidem (Ambien)':                   ['5mg', '10mg'],
+  'Doxylamine (Unisom)':                 ['25mg'],
+  // --- Muscle relaxants ---
+  'Methocarbamol (Robaxin)':             ['500mg', '750mg'],
+  'Cyclobenzaprine (Flexeril)':          ['5mg', '10mg'],
+  'Tizanidine (Zanaflex)':               ['2mg', '4mg'],
+  'Baclofen':                            ['5mg', '10mg', '20mg'],
+  // --- Pain / inflammation ---
+  'Ibuprofen (Advil)':                   ['200mg', '400mg', '600mg', '800mg'],
+  'Naproxen (Aleve)':                    ['220mg', '250mg', '375mg', '500mg'],
+  'Acetaminophen (Tylenol)':             ['325mg', '500mg', '650mg'],
+  'Aspirin':                             ['81mg', '325mg'],
+  'Meloxicam (Mobic)':                   ['7.5mg', '15mg'],
+  'Tramadol':                            ['50mg'],
+  'Sumatriptan (Imitrex)':               ['25mg', '50mg', '100mg'],
+  'Prednisone':                          ['5mg', '10mg', '20mg'],
+  // --- Hormones / thyroid ---
+  'Testosterone cypionate (injection)':  ['50mg', '100mg', '200mg'],
+  'Testosterone enanthate (injection)':  ['100mg', '200mg'],
+  'Testosterone gel (AndroGel)':         ['20.25mg', '40.5mg', '60.75mg', '81mg'],
+  'Levothyroxine (Synthroid)':           ['25mcg', '50mcg', '75mcg', '88mcg', '100mcg', '112mcg', '125mcg', '150mcg'],
+  'Estradiol':                           ['0.5mg', '1mg', '2mg'],
+  'Progesterone (Prometrium)':           ['100mg', '200mg'],
+  'Finasteride (Propecia)':              ['1mg', '5mg'],
+  'Spironolactone':                      ['25mg', '50mg', '100mg'],
+  'Birth control pill':                  ['1 tablet'],
+  // --- Heart / blood pressure ---
+  'Lisinopril':                          ['5mg', '10mg', '20mg', '40mg'],
+  'Losartan (Cozaar)':                   ['25mg', '50mg', '100mg'],
+  'Amlodipine (Norvasc)':                ['2.5mg', '5mg', '10mg'],
+  'Metoprolol':                          ['25mg', '50mg', '100mg'],
+  'Propranolol':                         ['10mg', '20mg', '40mg', '80mg'],
+  'Atenolol':                            ['25mg', '50mg', '100mg'],
+  'Hydrochlorothiazide':                 ['12.5mg', '25mg'],
+  // --- Cholesterol / blood sugar ---
+  'Atorvastatin (Lipitor)':              ['10mg', '20mg', '40mg', '80mg'],
+  'Rosuvastatin (Crestor)':              ['5mg', '10mg', '20mg', '40mg'],
+  'Simvastatin (Zocor)':                 ['10mg', '20mg', '40mg'],
+  'Metformin':                           ['500mg', '850mg', '1000mg'],
+  'Metformin ER':                        ['500mg', '750mg', '1000mg'],
+  'Semaglutide (Ozempic, weekly)':       ['0.25mg', '0.5mg', '1mg', '2mg'],
+  // --- Stomach ---
+  'Omeprazole (Prilosec)':               ['20mg', '40mg'],
+  'Pantoprazole (Protonix)':             ['20mg', '40mg'],
+  'Famotidine (Pepcid)':                 ['10mg', '20mg', '40mg'],
+  'Ondansetron (Zofran)':                ['4mg', '8mg'],
+  // --- Allergy / asthma ---
+  'Cetirizine (Zyrtec)':                 ['5mg', '10mg'],
+  'Loratadine (Claritin)':               ['10mg'],
+  'Fexofenadine (Allegra)':              ['60mg', '120mg', '180mg'],
+  'Montelukast (Singulair)':             ['4mg', '5mg', '10mg'],
+  'Diphenhydramine (Benadryl)':          ['25mg', '50mg'],
+  // --- Vitamins & supplements ---
+  'Vitamin D3':                          ['1000IU', '2000IU', '5000IU'],
+  'Vitamin B12':                         ['500mcg', '1000mcg'],
+  'Vitamin C':                           ['500mg', '1000mg'],
+  'Magnesium':                           ['200mg', '250mg', '400mg'],
+  'Zinc':                                ['25mg', '50mg'],
+  'Iron (ferrous sulfate)':              ['325mg'],
+  'Omega-3 fish oil':                    ['1000mg'],
+  'Multivitamin':                        ['1 tablet'],
+  'Probiotic':                           ['1 capsule'],
+  'Creatine':                            ['5g'],
+  'Caffeine':                            ['100mg', '200mg'],
+  'L-Theanine':                          ['100mg', '200mg'],
 };
 
 // Match a typed name to a MED_DB entry: exact match first, then the
