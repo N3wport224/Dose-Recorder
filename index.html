@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Dose Recorder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1',
+              600: '#4f46e5', 700: '#4338ca',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Comfortable tap feel on mobile */
+    * { -webkit-tap-highlight-color: transparent; }
+    body { overscroll-behavior-y: none; }
+
+    /* Press-down feedback on med buttons */
+    .med-btn { transition: transform 0.08s ease, box-shadow 0.08s ease; touch-action: manipulation; }
+    .med-btn:active { transform: scale(0.97); }
+
+    /* Success pulse ring played on the button after logging */
+    @keyframes pulse-ring {
+      0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
+      100% { box-shadow: 0 0 0 18px rgba(34, 197, 94, 0); }
+    }
+    .just-logged { animation: pulse-ring 0.6s ease-out; }
+
+    /* Checkmark pop-in */
+    @keyframes pop-in {
+      0%   { transform: scale(0); }
+      70%  { transform: scale(1.25); }
+      100% { transform: scale(1); }
+    }
+    .check-pop { animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+    /* Confetti particles */
+    .confetti-piece {
+      position: fixed; width: 9px; height: 9px; border-radius: 2px;
+      pointer-events: none; z-index: 100; will-change: transform, opacity;
+    }
+
+    /* History rows slide in gently */
+    @keyframes slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+    .log-row { animation: slide-in 0.2s ease-out; }
+
+    /* Respect the phone notch / home bar */
+    .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+  <div class="mx-auto max-w-md min-h-screen flex flex-col">
+
+    <!-- ============ HEADER ============ -->
+    <header class="px-5 pt-6 pb-3 flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Dose Recorder</h1>
+        <p id="header-date" class="text-sm text-slate-500"></p>
+      </div>
+      <button id="nav-settings" aria-label="Settings"
+        class="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-2xl active:scale-95 transition-transform">
+        ⚙️
+      </button>
+    </header>
+
+    <!-- ============ DASHBOARD MODE ============ -->
+    <main id="view-dashboard" class="flex-1 px-5 pb-8 safe-bottom">
+      <div id="med-buttons" class="space-y-6 mt-2"></div>
+
+      <!-- Empty state: shown only when no meds are configured -->
+      <div id="empty-state" class="hidden text-center mt-16 px-6">
+        <div class="text-6xl mb-4">💊</div>
+        <h2 class="text-xl font-semibold mb-2">No medications yet</h2>
+        <p class="text-slate-500 mb-6">Add your medications once, then logging a dose is a single tap.</p>
+        <button id="empty-add-btn"
+          class="bg-brand-600 text-white font-semibold text-lg px-8 py-4 rounded-2xl shadow-lg shadow-brand-600/30 active:scale-95 transition-transform">
+          Add a medication
+        </button>
+      </div>
+
+      <!-- ============ HISTORY ============ -->
+      <section id="history-section" class="mt-10">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-bold">Today</h2>
+          <button id="export-btn"
+            class="text-sm font-semibold text-brand-600 bg-brand-50 px-4 py-2 rounded-xl active:scale-95 transition-transform">
+            Export CSV
+          </button>
+        </div>
+        <ul id="today-logs" class="space-y-2"></ul>
+        <p id="today-empty" class="text-slate-400 text-sm py-3">Nothing logged yet today.</p>
+
+        <details id="past-logs-details" class="mt-6">
+          <summary class="text-lg font-bold cursor-pointer select-none list-none flex items-center gap-2">
+            <span>Past days</span>
+            <span id="past-count" class="text-sm font-normal text-slate-400"></span>
+          </summary>
+          <ul id="past-logs" class="space-y-2 mt-3"></ul>
+        </details>
+      </section>
+    </main>
+
+    <!-- ============ SETUP MODE ============ -->
+    <main id="view-setup" class="hidden flex-1 px-5 pb-8 safe-bottom">
+      <div class="flex items-center gap-3 mt-2 mb-6">
+        <button id="nav-back" aria-label="Back to dashboard"
+          class="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xl active:scale-95 transition-transform">
+          ←
+        </button>
+        <h2 class="text-xl font-bold">Manage medications</h2>
+      </div>
+
+      <form id="med-form" class="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+        <input type="hidden" id="med-id" />
+        <div>
+          <label for="med-name" class="block text-sm font-semibold text-slate-600 mb-1">Medication name</label>
+          <input id="med-name" type="text" required placeholder="e.g. Methylphenidate" autocomplete="off"
+            class="w-full text-lg px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:outline-none" />
+        </div>
+        <div>
+          <label for="med-dose" class="block text-sm font-semibold text-slate-600 mb-1">Dosage</label>
+          <input id="med-dose" type="text" required placeholder="e.g. 20mg" autocomplete="off"
+            class="w-full text-lg px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:outline-none" />
+        </div>
+        <div>
+          <span class="block text-sm font-semibold text-slate-600 mb-2">Time of day <span class="font-normal text-slate-400">(for grouping)</span></span>
+          <div id="time-picker" class="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Time of day">
+            <!-- buttons injected by JS -->
+          </div>
+        </div>
+        <button type="submit" id="med-save-btn"
+          class="w-full bg-brand-600 text-white font-semibold text-lg py-4 rounded-2xl shadow-lg shadow-brand-600/30 active:scale-95 transition-transform">
+          Add medication
+        </button>
+        <button type="button" id="med-cancel-btn"
+          class="hidden w-full text-slate-500 font-semibold py-2">
+          Cancel editing
+        </button>
+      </form>
+
+      <ul id="med-list" class="mt-6 space-y-2"></ul>
+    </main>
+  </div>
+
+  <!-- Undo toast: appears briefly after logging -->
+  <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-6 hidden z-50 safe-bottom">
+    <div class="bg-slate-900 text-white rounded-2xl shadow-xl px-5 py-3 flex items-center gap-4">
+      <span id="toast-text" class="font-medium"></span>
+      <button id="toast-undo" class="text-emerald-400 font-bold px-2 py-1 text-lg">Undo</button>
+    </div>
+  </div>
+
+<script>
+'use strict';
+
+/* ================================================================
+   Data layer — everything lives in LocalStorage
+   ================================================================ */
+const STORE = {
+  MEDS: 'doseRecorder.meds',
+  LOGS: 'doseRecorder.logs',
+};
+
+const load = (key) => {
+  try { return JSON.parse(localStorage.getItem(key)) || []; }
+  catch { return []; }
+};
+const save = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+
+let meds = load(STORE.MEDS);   // [{id, name, dose, timeOfDay}]
+let logs = load(STORE.LOGS);   // [{id, medId, name, dose, ts}]  ts = epoch ms
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ================================================================
+   Time-of-day groups (purely visual)
+   ================================================================ */
+const TIME_GROUPS = [
+  { key: 'morning',   label: 'Morning',   icon: '☀️' },
+  { key: 'afternoon', label: 'Afternoon', icon: '🌤️' },
+  { key: 'evening',   label: 'Evening',   icon: '🌙' },
+  { key: 'anytime',   label: 'Anytime',   icon: '💊' },
+];
+
+/* ================================================================
+   Helpers
+   ================================================================ */
+const dayKey = (ts) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const todayKey = () => dayKey(Date.now());
+
+const fmtTime = (ts) =>
+  new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+const fmtDate = (ts) =>
+  new Date(ts).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+const escapeHtml = (s) =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const timesLoggedToday = (medId) =>
+  logs.filter((l) => l.medId === medId && dayKey(l.ts) === todayKey()).length;
+
+/* ================================================================
+   View switching
+   ================================================================ */
+const $ = (id) => document.getElementById(id);
+
+function showView(view) {
+  $('view-dashboard').classList.toggle('hidden', view !== 'dashboard');
+  $('view-setup').classList.toggle('hidden', view !== 'setup');
+  if (view === 'dashboard') renderDashboard();
+  if (view === 'setup') renderMedList();
+  window.scrollTo(0, 0);
+}
+
+$('nav-settings').addEventListener('click', () => showView('setup'));
+$('nav-back').addEventListener('click', () => { resetForm(); showView('dashboard'); });
+$('empty-add-btn').addEventListener('click', () => showView('setup'));
+
+/* ================================================================
+   Dashboard — one tap = one logged dose
+   ================================================================ */
+function renderDashboard() {
+  $('header-date').textContent = fmtDate(Date.now());
+
+  const container = $('med-buttons');
+  container.innerHTML = '';
+  $('empty-state').classList.toggle('hidden', meds.length > 0);
+  $('history-section').classList.toggle('hidden', meds.length === 0 && logs.length === 0);
+
+  for (const group of TIME_GROUPS) {
+    const groupMeds = meds.filter((m) => (m.timeOfDay || 'anytime') === group.key);
+    if (!groupMeds.length) continue;
+
+    const section = document.createElement('section');
+    section.innerHTML = `
+      <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-2">
+        ${group.icon} ${group.label}
+      </h2>`;
+
+    const list = document.createElement('div');
+    list.className = 'space-y-3';
+
+    for (const med of groupMeds) {
+      const count = timesLoggedToday(med.id);
+      const taken = count > 0;
+
+      const btn = document.createElement('button');
+      btn.className =
+        'med-btn w-full text-left rounded-2xl px-5 py-5 shadow-sm flex items-center justify-between gap-3 ' +
+        (taken
+          ? 'bg-emerald-50 border-2 border-emerald-200'
+          : 'bg-white border-2 border-transparent');
+      btn.setAttribute('aria-label',
+        `Log ${med.name} ${med.dose}` + (taken ? `, already taken ${count} time${count > 1 ? 's' : ''} today` : ''));
+      btn.innerHTML = `
+        <span class="min-w-0">
+          <span class="block text-xl font-bold truncate ${taken ? 'text-emerald-800' : 'text-slate-800'}">${escapeHtml(med.name)}</span>
+          <span class="block text-base ${taken ? 'text-emerald-600' : 'text-slate-500'}">${escapeHtml(med.dose)}</span>
+        </span>
+        <span class="shrink-0 flex items-center gap-2">
+          ${count > 1 ? `<span class="text-sm font-bold text-emerald-600 bg-emerald-100 rounded-full px-2.5 py-1">×${count}</span>` : ''}
+          <span class="w-12 h-12 rounded-full flex items-center justify-center text-2xl
+            ${taken ? 'bg-emerald-500 text-white check-pop' : 'bg-brand-50 text-brand-600'}">
+            ${taken ? '✓' : '+'}
+          </span>
+        </span>`;
+      btn.addEventListener('click', (e) => logDose(med, btn, e));
+      list.appendChild(btn);
+    }
+    section.appendChild(list);
+    container.appendChild(section);
+  }
+
+  renderHistory();
+}
+
+let undoTimer = null;
+let lastLogId = null;
+
+function logDose(med, btn, event) {
+  // The one and only step: record it. No dialogs, no confirmation.
+  const entry = { id: uid(), medId: med.id, name: med.name, dose: med.dose, ts: Date.now() };
+  logs.push(entry);
+  save(STORE.LOGS, logs);
+  lastLogId = entry.id;
+
+  if (navigator.vibrate) navigator.vibrate(30);
+  confettiBurst(event.clientX || innerWidth / 2, event.clientY || innerHeight / 2);
+
+  renderDashboard();
+  showUndoToast(`${med.name} logged · ${fmtTime(entry.ts)}`);
+  pulseButtonFor(med.id);
+}
+
+// Re-find the freshly rendered button and play the success ring on it
+function pulseButtonFor(medId) {
+  const idx = meds.findIndex((m) => m.id === medId);
+  if (idx < 0) return;
+  const btns = $('med-buttons').querySelectorAll('button.med-btn');
+  for (const b of btns) {
+    if (b.getAttribute('aria-label').startsWith(`Log ${meds[idx].name} `)) {
+      b.classList.add('just-logged');
+      setTimeout(() => b.classList.remove('just-logged'), 700);
+      break;
+    }
+  }
+}
+
+function showUndoToast(text) {
+  $('toast-text').textContent = text;
+  $('toast').classList.remove('hidden');
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => $('toast').classList.add('hidden'), 5000);
+}
+
+$('toast-undo').addEventListener('click', () => {
+  if (lastLogId) {
+    logs = logs.filter((l) => l.id !== lastLogId);
+    save(STORE.LOGS, logs);
+    lastLogId = null;
+  }
+  $('toast').classList.add('hidden');
+  renderDashboard();
+});
+
+/* ================================================================
+   Confetti — tiny, dependency-free burst from the tap point
+   ================================================================ */
+const CONFETTI_COLORS = ['#34d399', '#6366f1', '#fbbf24', '#f472b6', '#38bdf8'];
+
+function confettiBurst(x, y) {
+  for (let i = 0; i < 18; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    piece.style.left = x + 'px';
+    piece.style.top = y + 'px';
+    document.body.appendChild(piece);
+
+    const angle = Math.random() * Math.PI * 2;
+    const velocity = 60 + Math.random() * 110;
+    const dx = Math.cos(angle) * velocity;
+    const dy = Math.sin(angle) * velocity - 70; // bias upward
+    const rotation = (Math.random() - 0.5) * 540;
+
+    piece.animate(
+      [
+        { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+        { transform: `translate(${dx}px, ${dy + 130}px) rotate(${rotation}deg)`, opacity: 0 },
+      ],
+      { duration: 750 + Math.random() * 350, easing: 'cubic-bezier(0.15, 0.6, 0.4, 1)' }
+    ).onfinish = () => piece.remove();
+  }
+}
+
+/* ================================================================
+   History
+   ================================================================ */
+function renderHistory() {
+  const today = [];
+  const past = [];
+  for (const log of [...logs].sort((a, b) => b.ts - a.ts)) {
+    (dayKey(log.ts) === todayKey() ? today : past).push(log);
+  }
+
+  $('today-empty').classList.toggle('hidden', today.length > 0);
+  $('today-logs').innerHTML = today.map(logRowHtml).join('');
+
+  $('past-logs-details').classList.toggle('hidden', past.length === 0);
+  $('past-count').textContent = past.length ? `(${past.length} entries — tap to show)` : '';
+
+  // Past logs get a date label per entry
+  $('past-logs').innerHTML = past.map((l) => logRowHtml(l, true)).join('');
+
+  for (const el of document.querySelectorAll('[data-delete-log]')) {
+    el.addEventListener('click', () => deleteLog(el.dataset.deleteLog));
+  }
+}
+
+function logRowHtml(log, withDate = false) {
+  return `
+    <li class="log-row bg-white rounded-xl px-4 py-3 flex items-center justify-between gap-3 shadow-sm">
+      <div class="min-w-0">
+        <p class="font-semibold truncate">${escapeHtml(log.name)} <span class="font-normal text-slate-500">${escapeHtml(log.dose)}</span></p>
+        <p class="text-sm text-slate-400">${withDate ? fmtDate(log.ts) + ' · ' : ''}${fmtTime(log.ts)}</p>
+      </div>
+      <button data-delete-log="${log.id}" aria-label="Delete this entry"
+        class="shrink-0 w-11 h-11 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center text-lg active:scale-95 active:bg-red-50 active:text-red-500 transition-all">
+        🗑
+      </button>
+    </li>`;
+}
+
+function deleteLog(id) {
+  logs = logs.filter((l) => l.id !== id);
+  save(STORE.LOGS, logs);
+  renderDashboard();
+}
+
+/* ================================================================
+   CSV export — shareable with a doctor
+   ================================================================ */
+$('export-btn').addEventListener('click', () => {
+  if (!logs.length) { showUndoToast('Nothing to export yet'); return; }
+
+  const csvCell = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const rows = [['Date', 'Time', 'Medication', 'Dose']];
+  for (const log of [...logs].sort((a, b) => b.ts - a.ts)) {
+    const d = new Date(log.ts);
+    rows.push([d.toLocaleDateString(), d.toLocaleTimeString(), log.name, log.dose]);
+  }
+  const csv = rows.map((r) => r.map(csvCell).join(',')).join('\r\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `medication-log-${todayKey()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* ================================================================
+   Setup mode — add / edit / delete medications
+   ================================================================ */
+let selectedTime = 'anytime';
+
+function renderTimePicker() {
+  const picker = $('time-picker');
+  picker.innerHTML = '';
+  for (const g of TIME_GROUPS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.role = 'radio';
+    b.setAttribute('aria-checked', String(selectedTime === g.key));
+    b.className =
+      'flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition-colors ' +
+      (selectedTime === g.key
+        ? 'border-brand-500 bg-brand-50 text-brand-700'
+        : 'border-slate-200 text-slate-500');
+    b.innerHTML = `<span class="text-xl">${g.icon}</span>${g.label}`;
+    b.addEventListener('click', () => { selectedTime = g.key; renderTimePicker(); });
+    picker.appendChild(b);
+  }
+}
+
+function resetForm() {
+  $('med-id').value = '';
+  $('med-name').value = '';
+  $('med-dose').value = '';
+  selectedTime = 'anytime';
+  $('med-save-btn').textContent = 'Add medication';
+  $('med-cancel-btn').classList.add('hidden');
+  renderTimePicker();
+}
+
+$('med-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = $('med-id').value;
+  const name = $('med-name').value.trim();
+  const dose = $('med-dose').value.trim();
+  if (!name || !dose) return;
+
+  if (id) {
+    const med = meds.find((m) => m.id === id);
+    if (med) Object.assign(med, { name, dose, timeOfDay: selectedTime });
+  } else {
+    meds.push({ id: uid(), name, dose, timeOfDay: selectedTime });
+  }
+  save(STORE.MEDS, meds);
+  resetForm();
+  renderMedList();
+});
+
+$('med-cancel-btn').addEventListener('click', resetForm);
+
+function renderMedList() {
+  const list = $('med-list');
+  list.innerHTML = '';
+  for (const med of meds) {
+    const group = TIME_GROUPS.find((g) => g.key === (med.timeOfDay || 'anytime'));
+    const li = document.createElement('li');
+    li.className = 'bg-white rounded-xl px-4 py-3 flex items-center justify-between gap-3 shadow-sm';
+    li.innerHTML = `
+      <div class="min-w-0">
+        <p class="font-semibold truncate">${escapeHtml(med.name)}</p>
+        <p class="text-sm text-slate-500">${escapeHtml(med.dose)} · ${group.icon} ${group.label}</p>
+      </div>
+      <div class="shrink-0 flex gap-2">
+        <button data-edit="${med.id}" aria-label="Edit ${escapeHtml(med.name)}"
+          class="w-11 h-11 rounded-xl bg-slate-50 flex items-center justify-center text-lg active:scale-95 transition-transform">✏️</button>
+        <button data-del="${med.id}" aria-label="Delete ${escapeHtml(med.name)}"
+          class="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center text-lg active:scale-95 transition-transform">🗑</button>
+      </div>`;
+    list.appendChild(li);
+  }
+
+  for (const el of list.querySelectorAll('[data-edit]')) {
+    el.addEventListener('click', () => {
+      const med = meds.find((m) => m.id === el.dataset.edit);
+      if (!med) return;
+      $('med-id').value = med.id;
+      $('med-name').value = med.name;
+      $('med-dose').value = med.dose;
+      selectedTime = med.timeOfDay || 'anytime';
+      $('med-save-btn').textContent = 'Save changes';
+      $('med-cancel-btn').classList.remove('hidden');
+      renderTimePicker();
+      $('med-name').focus();
+    });
+  }
+  for (const el of list.querySelectorAll('[data-del]')) {
+    el.addEventListener('click', () => {
+      // Deleting a med keeps its history (logs store their own name/dose copies)
+      meds = meds.filter((m) => m.id !== el.dataset.del);
+      save(STORE.MEDS, meds);
+      renderMedList();
+    });
+  }
+}
+
+/* ================================================================
+   Boot
+   ================================================================ */
+renderTimePicker();
+showView(meds.length ? 'dashboard' : 'setup');
+
+// Roll the dashboard over at midnight so "taken today" resets visually
+setInterval(() => {
+  if ($('header-date').textContent !== fmtDate(Date.now()) &&
+      !$('view-dashboard').classList.contains('hidden')) {
+    renderDashboard();
+  }
+}, 60 * 1000);
+</script>
+</body>
+</html>
