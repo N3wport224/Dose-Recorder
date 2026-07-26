@@ -25,6 +25,9 @@ Host it anywhere (GitHub Pages works great), open it on your phone, then use *Ad
 ## Features
 
 - **Setup mode** — add/edit medications with name, dosage, and an optional time-of-day group (Morning / Afternoon / Evening / Anytime).
+- **Quick-select meds & doses** — the name field suggests common ADHD medications (Vyvanse, Concerta, Adderall, Strattera, Guanfacine, …) and picking one shows its typical dosages as one-tap chips. Free-text entry still works for anything else.
+- **Flexible schedules** — each med is Daily, Weekly (pick specific days), or As Needed (PRN). Weekly meds only appear on the dashboard on their scheduled days; off-days they're tucked under a collapsed "Not scheduled today" toggle but stay tappable.
+- **Full backup & restore** — export a single JSON file containing all medications *and* the entire history, and import it on another device to migrate or recover everything.
 - **Dashboard** — each medication is a large, high-contrast button. One tap logs the exact date and time with the preset dose.
 - **Instant feedback** — confetti burst, green checkmark, haptic buzz (on supported phones), and an Undo toast for accidental taps.
 - **Double-dose guard** — already-taken meds turn green with a ✓ and a ×N counter, but stay tappable for split doses.

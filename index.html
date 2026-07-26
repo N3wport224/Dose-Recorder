@@ -77,6 +77,14 @@
     <main id="view-dashboard" class="flex-1 px-5 pb-8 safe-bottom">
       <div id="med-buttons" class="space-y-6 mt-2"></div>
 
+      <!-- Weekly meds not scheduled today, tucked away but still reachable -->
+      <details id="offday-details" class="hidden mt-6">
+        <summary class="text-sm font-bold uppercase tracking-wider text-slate-400 cursor-pointer select-none list-none">
+          🗓 Not scheduled today <span id="offday-count" class="font-normal normal-case tracking-normal"></span>
+        </summary>
+        <div id="offday-buttons" class="space-y-3 mt-3"></div>
+      </details>
+
       <!-- Empty state: shown only when no meds are configured -->
       <div id="empty-state" class="hidden text-center mt-16 px-6">
         <div class="text-6xl mb-4">💊</div>
@@ -122,22 +130,43 @@
 
       <form id="med-form" class="bg-white rounded-2xl shadow-sm p-5 space-y-4">
         <input type="hidden" id="med-id" />
+
         <div>
           <label for="med-name" class="block text-sm font-semibold text-slate-600 mb-1">Medication name</label>
-          <input id="med-name" type="text" required placeholder="e.g. Methylphenidate" autocomplete="off"
+          <input id="med-name" type="text" required list="med-suggestions" placeholder="Type or pick from list…" autocomplete="off"
             class="w-full text-lg px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:outline-none" />
+          <datalist id="med-suggestions"></datalist>
         </div>
+
         <div>
           <label for="med-dose" class="block text-sm font-semibold text-slate-600 mb-1">Dosage</label>
-          <input id="med-dose" type="text" required placeholder="e.g. 20mg" autocomplete="off"
+          <!-- One-tap typical doses for the selected medication -->
+          <div id="dose-chips" class="hidden flex-wrap gap-2 mb-2"></div>
+          <input id="med-dose" type="text" required placeholder="e.g. 20mg (or tap a dose above)" autocomplete="off"
             class="w-full text-lg px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:outline-none" />
         </div>
+
+        <div>
+          <span class="block text-sm font-semibold text-slate-600 mb-2">Schedule</span>
+          <div id="schedule-picker" class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Schedule">
+            <!-- buttons injected by JS -->
+          </div>
+          <div id="day-picker-wrap" class="hidden mt-3">
+            <span class="block text-sm font-semibold text-slate-600 mb-2">On which days?</span>
+            <div id="day-picker" class="grid grid-cols-7 gap-1.5" role="group" aria-label="Days of the week">
+              <!-- buttons injected by JS -->
+            </div>
+            <p id="day-warning" class="hidden text-sm font-semibold text-red-500 mt-2">Pick at least one day.</p>
+          </div>
+        </div>
+
         <div>
           <span class="block text-sm font-semibold text-slate-600 mb-2">Time of day <span class="font-normal text-slate-400">(for grouping)</span></span>
           <div id="time-picker" class="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Time of day">
             <!-- buttons injected by JS -->
           </div>
         </div>
+
         <button type="submit" id="med-save-btn"
           class="w-full bg-brand-600 text-white font-semibold text-lg py-4 rounded-2xl shadow-lg shadow-brand-600/30 active:scale-95 transition-transform">
           Add medication
@@ -149,10 +178,27 @@
       </form>
 
       <ul id="med-list" class="mt-6 space-y-2"></ul>
+
+      <!-- ============ BACKUP & RESTORE ============ -->
+      <section class="mt-8 bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold mb-1">Backup &amp; restore</h3>
+        <p class="text-sm text-slate-500 mb-4">Saves your medications <em>and</em> full history as one JSON file — use it to move devices or recover data.</p>
+        <div class="grid grid-cols-2 gap-3">
+          <button id="backup-export-btn"
+            class="bg-brand-50 text-brand-700 font-semibold py-3.5 rounded-xl active:scale-95 transition-transform">
+            ⬇️ Export backup
+          </button>
+          <label for="backup-import-input"
+            class="bg-slate-50 text-slate-700 font-semibold py-3.5 rounded-xl text-center cursor-pointer active:scale-95 transition-transform">
+            ⬆️ Import backup
+          </label>
+          <input id="backup-import-input" type="file" accept=".json,application/json" class="hidden" />
+        </div>
+      </section>
     </main>
   </div>
 
-  <!-- Undo toast: appears briefly after logging -->
+  <!-- Toast: undo after logging, or plain status messages -->
   <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-6 hidden z-50 safe-bottom">
     <div class="bg-slate-900 text-white rounded-2xl shadow-xl px-5 py-3 flex items-center gap-4">
       <span id="toast-text" class="font-medium"></span>
@@ -162,6 +208,28 @@
 
 <script>
 'use strict';
+
+/* ================================================================
+   Common ADHD medications and their typical dosages.
+   Used to pre-fill the name datalist and the one-tap dose chips —
+   free-text entry still works for anything not listed.
+   ================================================================ */
+const MED_DB = {
+  'Methylphenidate':        ['5mg', '10mg', '20mg'],
+  'Concerta':               ['18mg', '27mg', '36mg', '54mg'],
+  'Ritalin':                ['5mg', '10mg', '20mg'],
+  'Ritalin LA':             ['10mg', '20mg', '30mg', '40mg'],
+  'Focalin':                ['2.5mg', '5mg', '10mg'],
+  'Focalin XR':             ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg', '35mg', '40mg'],
+  'Adderall':               ['5mg', '7.5mg', '10mg', '12.5mg', '15mg', '20mg', '30mg'],
+  'Adderall XR':            ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg'],
+  'Vyvanse':                ['10mg', '20mg', '30mg', '40mg', '50mg', '60mg', '70mg'],
+  'Dexedrine':              ['5mg', '10mg', '15mg'],
+  'Strattera':              ['10mg', '18mg', '25mg', '40mg', '60mg', '80mg', '100mg'],
+  'Qelbree':                ['100mg', '150mg', '200mg'],
+  'Guanfacine (Intuniv)':   ['1mg', '2mg', '3mg', '4mg'],
+  'Clonidine (Kapvay)':     ['0.1mg', '0.2mg'],
+};
 
 /* ================================================================
    Data layer — everything lives in LocalStorage
@@ -177,13 +245,16 @@ const load = (key) => {
 };
 const save = (key, value) => localStorage.setItem(key, JSON.stringify(value));
 
-let meds = load(STORE.MEDS);   // [{id, name, dose, timeOfDay}]
-let logs = load(STORE.LOGS);   // [{id, medId, name, dose, ts}]  ts = epoch ms
+// Meds saved by older versions have no schedule — treat them as daily.
+const withSchedule = (m) => ({ ...m, schedule: m.schedule || { type: 'daily', days: [] } });
+
+let meds = load(STORE.MEDS).map(withSchedule); // [{id, name, dose, timeOfDay, schedule:{type,days}}]
+let logs = load(STORE.LOGS);                   // [{id, medId, name, dose, ts}]  ts = epoch ms
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 /* ================================================================
-   Time-of-day groups (purely visual)
+   Schedule + time-of-day definitions
    ================================================================ */
 const TIME_GROUPS = [
   { key: 'morning',   label: 'Morning',   icon: '☀️' },
@@ -191,6 +262,32 @@ const TIME_GROUPS = [
   { key: 'evening',   label: 'Evening',   icon: '🌙' },
   { key: 'anytime',   label: 'Anytime',   icon: '💊' },
 ];
+
+const SCHEDULE_TYPES = [
+  { key: 'daily',  label: 'Daily',     icon: '📅' },
+  { key: 'weekly', label: 'Weekly',    icon: '🗓' },
+  { key: 'prn',    label: 'As needed', icon: '✋' },
+];
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Is this med due on the dashboard today? Daily and PRN always are;
+// weekly meds only on their picked days.
+const isScheduledToday = (med) => {
+  const s = med.schedule || { type: 'daily' };
+  if (s.type !== 'weekly') return true;
+  return (s.days || []).includes(new Date().getDay());
+};
+
+const scheduleSummary = (med) => {
+  const s = med.schedule || { type: 'daily' };
+  if (s.type === 'prn') return '✋ As needed';
+  if (s.type === 'weekly') {
+    const days = (s.days || []).slice().sort().map((d) => DAY_LABELS[d]).join(', ');
+    return `🗓 Weekly · ${days || 'no days set'}`;
+  }
+  return '📅 Daily';
+};
 
 /* ================================================================
    Helpers
@@ -208,7 +305,7 @@ const fmtDate = (ts) =>
   new Date(ts).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
 const escapeHtml = (s) =>
-  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const timesLoggedToday = (medId) =>
   logs.filter((l) => l.medId === medId && dayKey(l.ts) === todayKey()).length;
@@ -233,6 +330,34 @@ $('empty-add-btn').addEventListener('click', () => showView('setup'));
 /* ================================================================
    Dashboard — one tap = one logged dose
    ================================================================ */
+function medButton(med, { dimmed = false } = {}) {
+  const count = timesLoggedToday(med.id);
+  const taken = count > 0;
+  const isPrn = (med.schedule || {}).type === 'prn';
+
+  const btn = document.createElement('button');
+  btn.className =
+    'med-btn w-full text-left rounded-2xl px-5 py-5 shadow-sm flex items-center justify-between gap-3 ' +
+    (taken ? 'bg-emerald-50 border-2 border-emerald-200' : 'bg-white border-2 border-transparent') +
+    (dimmed ? ' opacity-60' : '');
+  btn.setAttribute('aria-label',
+    `Log ${med.name} ${med.dose}` + (taken ? `, already taken ${count} time${count > 1 ? 's' : ''} today` : ''));
+  btn.innerHTML = `
+    <span class="min-w-0">
+      <span class="block text-xl font-bold truncate ${taken ? 'text-emerald-800' : 'text-slate-800'}">${escapeHtml(med.name)}</span>
+      <span class="block text-base ${taken ? 'text-emerald-600' : 'text-slate-500'}">${escapeHtml(med.dose)}${isPrn ? ' · as needed' : ''}</span>
+    </span>
+    <span class="shrink-0 flex items-center gap-2">
+      ${count > 1 ? `<span class="text-sm font-bold text-emerald-600 bg-emerald-100 rounded-full px-2.5 py-1">×${count}</span>` : ''}
+      <span class="w-12 h-12 rounded-full flex items-center justify-center text-2xl
+        ${taken ? 'bg-emerald-500 text-white check-pop' : 'bg-brand-50 text-brand-600'}">
+        ${taken ? '✓' : '+'}
+      </span>
+    </span>`;
+  btn.addEventListener('click', (e) => logDose(med, btn, e));
+  return btn;
+}
+
 function renderDashboard() {
   $('header-date').textContent = fmtDate(Date.now());
 
@@ -241,8 +366,11 @@ function renderDashboard() {
   $('empty-state').classList.toggle('hidden', meds.length > 0);
   $('history-section').classList.toggle('hidden', meds.length === 0 && logs.length === 0);
 
+  const dueToday = meds.filter(isScheduledToday);
+  const offDay = meds.filter((m) => !isScheduledToday(m));
+
   for (const group of TIME_GROUPS) {
-    const groupMeds = meds.filter((m) => (m.timeOfDay || 'anytime') === group.key);
+    const groupMeds = dueToday.filter((m) => (m.timeOfDay || 'anytime') === group.key);
     if (!groupMeds.length) continue;
 
     const section = document.createElement('section');
@@ -253,37 +381,18 @@ function renderDashboard() {
 
     const list = document.createElement('div');
     list.className = 'space-y-3';
-
-    for (const med of groupMeds) {
-      const count = timesLoggedToday(med.id);
-      const taken = count > 0;
-
-      const btn = document.createElement('button');
-      btn.className =
-        'med-btn w-full text-left rounded-2xl px-5 py-5 shadow-sm flex items-center justify-between gap-3 ' +
-        (taken
-          ? 'bg-emerald-50 border-2 border-emerald-200'
-          : 'bg-white border-2 border-transparent');
-      btn.setAttribute('aria-label',
-        `Log ${med.name} ${med.dose}` + (taken ? `, already taken ${count} time${count > 1 ? 's' : ''} today` : ''));
-      btn.innerHTML = `
-        <span class="min-w-0">
-          <span class="block text-xl font-bold truncate ${taken ? 'text-emerald-800' : 'text-slate-800'}">${escapeHtml(med.name)}</span>
-          <span class="block text-base ${taken ? 'text-emerald-600' : 'text-slate-500'}">${escapeHtml(med.dose)}</span>
-        </span>
-        <span class="shrink-0 flex items-center gap-2">
-          ${count > 1 ? `<span class="text-sm font-bold text-emerald-600 bg-emerald-100 rounded-full px-2.5 py-1">×${count}</span>` : ''}
-          <span class="w-12 h-12 rounded-full flex items-center justify-center text-2xl
-            ${taken ? 'bg-emerald-500 text-white check-pop' : 'bg-brand-50 text-brand-600'}">
-            ${taken ? '✓' : '+'}
-          </span>
-        </span>`;
-      btn.addEventListener('click', (e) => logDose(med, btn, e));
-      list.appendChild(btn);
-    }
+    for (const med of groupMeds) list.appendChild(medButton(med));
     section.appendChild(list);
     container.appendChild(section);
   }
+
+  // Weekly meds whose day isn't today: hidden behind a collapsed toggle,
+  // still tappable in case of an off-schedule dose.
+  $('offday-details').classList.toggle('hidden', offDay.length === 0);
+  $('offday-count').textContent = offDay.length ? `(${offDay.length})` : '';
+  const offList = $('offday-buttons');
+  offList.innerHTML = '';
+  for (const med of offDay) offList.appendChild(medButton(med, { dimmed: true }));
 
   renderHistory();
 }
@@ -302,17 +411,17 @@ function logDose(med, btn, event) {
   confettiBurst(event.clientX || innerWidth / 2, event.clientY || innerHeight / 2);
 
   renderDashboard();
-  showUndoToast(`${med.name} logged · ${fmtTime(entry.ts)}`);
+  showToast(`${med.name} logged · ${fmtTime(entry.ts)}`, { undoable: true });
   pulseButtonFor(med.id);
 }
 
 // Re-find the freshly rendered button and play the success ring on it
 function pulseButtonFor(medId) {
-  const idx = meds.findIndex((m) => m.id === medId);
-  if (idx < 0) return;
-  const btns = $('med-buttons').querySelectorAll('button.med-btn');
+  const med = meds.find((m) => m.id === medId);
+  if (!med) return;
+  const btns = document.querySelectorAll('#med-buttons button.med-btn, #offday-buttons button.med-btn');
   for (const b of btns) {
-    if (b.getAttribute('aria-label').startsWith(`Log ${meds[idx].name} `)) {
+    if (b.getAttribute('aria-label').startsWith(`Log ${med.name} `)) {
       b.classList.add('just-logged');
       setTimeout(() => b.classList.remove('just-logged'), 700);
       break;
@@ -320,8 +429,9 @@ function pulseButtonFor(medId) {
   }
 }
 
-function showUndoToast(text) {
+function showToast(text, { undoable = false } = {}) {
   $('toast-text').textContent = text;
+  $('toast-undo').classList.toggle('hidden', !undoable);
   $('toast').classList.remove('hidden');
   clearTimeout(undoTimer);
   undoTimer = setTimeout(() => $('toast').classList.add('hidden'), 5000);
@@ -378,7 +488,7 @@ function renderHistory() {
   }
 
   $('today-empty').classList.toggle('hidden', today.length > 0);
-  $('today-logs').innerHTML = today.map(logRowHtml).join('');
+  $('today-logs').innerHTML = today.map((l) => logRowHtml(l)).join('');
 
   $('past-logs-details').classList.toggle('hidden', past.length === 0);
   $('past-count').textContent = past.length ? `(${past.length} entries — tap to show)` : '';
@@ -414,8 +524,18 @@ function deleteLog(id) {
 /* ================================================================
    CSV export — shareable with a doctor
    ================================================================ */
+function downloadBlob(content, mime, filename) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 $('export-btn').addEventListener('click', () => {
-  if (!logs.length) { showUndoToast('Nothing to export yet'); return; }
+  if (!logs.length) { showToast('Nothing to export yet'); return; }
 
   const csvCell = (v) => `"${String(v).replace(/"/g, '""')}"`;
   const rows = [['Date', 'Time', 'Medication', 'Dose']];
@@ -424,20 +544,100 @@ $('export-btn').addEventListener('click', () => {
     rows.push([d.toLocaleDateString(), d.toLocaleTimeString(), log.name, log.dose]);
   }
   const csv = rows.map((r) => r.map(csvCell).join(',')).join('\r\n');
+  downloadBlob(csv, 'text/csv;charset=utf-8', `medication-log-${todayKey()}.csv`);
+});
 
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `medication-log-${todayKey()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+/* ================================================================
+   Full backup — meds + logs in one JSON file, and restore from it
+   ================================================================ */
+$('backup-export-btn').addEventListener('click', () => {
+  const backup = {
+    app: 'dose-recorder',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    meds,
+    logs,
+  };
+  downloadBlob(JSON.stringify(backup, null, 2), 'application/json', `dose-recorder-backup-${todayKey()}.json`);
+  showToast('Backup downloaded');
+});
+
+$('backup-import-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = ''; // allow re-picking the same file later
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onerror = () => showToast('Could not read that file');
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch { showToast('That file isn’t valid JSON'); return; }
+
+    if (!data || !Array.isArray(data.meds) || !Array.isArray(data.logs)) {
+      showToast('Not a Dose Recorder backup file');
+      return;
+    }
+
+    // Restoring replaces everything — the one action worth a confirmation.
+    const ok = confirm(
+      `Restore backup with ${data.meds.length} medication(s) and ${data.logs.length} log entries?\n\nThis replaces the data currently on this device.`
+    );
+    if (!ok) return;
+
+    meds = data.meds.map(withSchedule);
+    logs = data.logs;
+    save(STORE.MEDS, meds);
+    save(STORE.LOGS, logs);
+    resetForm();
+    renderMedList();
+    renderDashboard();
+    showToast('Backup restored ✓');
+  };
+  reader.readAsText(file);
 });
 
 /* ================================================================
    Setup mode — add / edit / delete medications
    ================================================================ */
 let selectedTime = 'anytime';
+let selectedSchedule = 'daily';
+let selectedDays = [];
+
+// Fill the searchable name suggestions once
+$('med-suggestions').innerHTML =
+  Object.keys(MED_DB).map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
+
+// When a known med is chosen (or typed), offer its typical doses as one-tap chips
+function renderDoseChips() {
+  const name = $('med-name').value.trim();
+  const doses = MED_DB[name] ||
+    MED_DB[Object.keys(MED_DB).find((k) => k.toLowerCase() === name.toLowerCase())] || null;
+
+  const wrap = $('dose-chips');
+  wrap.innerHTML = '';
+  wrap.classList.toggle('hidden', !doses);
+  wrap.classList.toggle('flex', !!doses);
+  if (!doses) return;
+
+  for (const dose of doses) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    const active = $('med-dose').value.trim() === dose;
+    chip.className =
+      'px-3.5 py-2 rounded-full text-sm font-bold border-2 transition-colors ' +
+      (active ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600');
+    chip.textContent = dose;
+    chip.addEventListener('click', () => {
+      $('med-dose').value = dose;
+      renderDoseChips();
+    });
+    wrap.appendChild(chip);
+  }
+}
+
+$('med-name').addEventListener('input', renderDoseChips);
+$('med-dose').addEventListener('input', renderDoseChips);
 
 function renderTimePicker() {
   const picker = $('time-picker');
@@ -458,14 +658,64 @@ function renderTimePicker() {
   }
 }
 
+function renderSchedulePicker() {
+  const picker = $('schedule-picker');
+  picker.innerHTML = '';
+  for (const s of SCHEDULE_TYPES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.role = 'radio';
+    b.setAttribute('aria-checked', String(selectedSchedule === s.key));
+    b.className =
+      'flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition-colors ' +
+      (selectedSchedule === s.key
+        ? 'border-brand-500 bg-brand-50 text-brand-700'
+        : 'border-slate-200 text-slate-500');
+    b.innerHTML = `<span class="text-xl">${s.icon}</span>${s.label}`;
+    b.addEventListener('click', () => {
+      selectedSchedule = s.key;
+      renderSchedulePicker();
+    });
+    picker.appendChild(b);
+  }
+  $('day-picker-wrap').classList.toggle('hidden', selectedSchedule !== 'weekly');
+  if (selectedSchedule === 'weekly') renderDayPicker();
+  else $('day-warning').classList.add('hidden');
+}
+
+function renderDayPicker() {
+  const picker = $('day-picker');
+  picker.innerHTML = '';
+  DAY_LABELS.forEach((label, day) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    const active = selectedDays.includes(day);
+    b.setAttribute('aria-pressed', String(active));
+    b.className =
+      'py-2.5 rounded-lg border-2 text-xs font-bold transition-colors ' +
+      (active ? 'border-brand-500 bg-brand-500 text-white' : 'border-slate-200 text-slate-500');
+    b.textContent = label;
+    b.addEventListener('click', () => {
+      selectedDays = active ? selectedDays.filter((d) => d !== day) : [...selectedDays, day];
+      $('day-warning').classList.add('hidden');
+      renderDayPicker();
+    });
+    picker.appendChild(b);
+  });
+}
+
 function resetForm() {
   $('med-id').value = '';
   $('med-name').value = '';
   $('med-dose').value = '';
   selectedTime = 'anytime';
+  selectedSchedule = 'daily';
+  selectedDays = [];
   $('med-save-btn').textContent = 'Add medication';
   $('med-cancel-btn').classList.add('hidden');
+  renderDoseChips();
   renderTimePicker();
+  renderSchedulePicker();
 }
 
 $('med-form').addEventListener('submit', (e) => {
@@ -475,11 +725,21 @@ $('med-form').addEventListener('submit', (e) => {
   const dose = $('med-dose').value.trim();
   if (!name || !dose) return;
 
+  if (selectedSchedule === 'weekly' && selectedDays.length === 0) {
+    $('day-warning').classList.remove('hidden');
+    return;
+  }
+
+  const schedule = {
+    type: selectedSchedule,
+    days: selectedSchedule === 'weekly' ? [...selectedDays].sort() : [],
+  };
+
   if (id) {
     const med = meds.find((m) => m.id === id);
-    if (med) Object.assign(med, { name, dose, timeOfDay: selectedTime });
+    if (med) Object.assign(med, { name, dose, timeOfDay: selectedTime, schedule });
   } else {
-    meds.push({ id: uid(), name, dose, timeOfDay: selectedTime });
+    meds.push({ id: uid(), name, dose, timeOfDay: selectedTime, schedule });
   }
   save(STORE.MEDS, meds);
   resetForm();
@@ -499,6 +759,7 @@ function renderMedList() {
       <div class="min-w-0">
         <p class="font-semibold truncate">${escapeHtml(med.name)}</p>
         <p class="text-sm text-slate-500">${escapeHtml(med.dose)} · ${group.icon} ${group.label}</p>
+        <p class="text-sm text-slate-400">${scheduleSummary(med)}</p>
       </div>
       <div class="shrink-0 flex gap-2">
         <button data-edit="${med.id}" aria-label="Edit ${escapeHtml(med.name)}"
@@ -517,10 +778,15 @@ function renderMedList() {
       $('med-name').value = med.name;
       $('med-dose').value = med.dose;
       selectedTime = med.timeOfDay || 'anytime';
+      selectedSchedule = (med.schedule || {}).type || 'daily';
+      selectedDays = [...((med.schedule || {}).days || [])];
       $('med-save-btn').textContent = 'Save changes';
       $('med-cancel-btn').classList.remove('hidden');
+      renderDoseChips();
       renderTimePicker();
+      renderSchedulePicker();
       $('med-name').focus();
+      window.scrollTo(0, 0);
     });
   }
   for (const el of list.querySelectorAll('[data-del]')) {
@@ -537,9 +803,11 @@ function renderMedList() {
    Boot
    ================================================================ */
 renderTimePicker();
+renderSchedulePicker();
 showView(meds.length ? 'dashboard' : 'setup');
 
-// Roll the dashboard over at midnight so "taken today" resets visually
+// Roll the dashboard over at midnight so "taken today" (and weekly
+// scheduling) refresh without a reload
 setInterval(() => {
   if ($('header-date').textContent !== fmtDate(Date.now()) &&
       !$('view-dashboard').classList.contains('hidden')) {
