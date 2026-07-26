@@ -4,211 +4,409 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Dose Recorder</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1',
-              600: '#4f46e5', 700: '#4338ca',
-            },
-          },
-        },
-      },
-    };
-  </script>
+  <meta name="description" content="One-tap medication tracker" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Doses" />
   <style>
-    /* Comfortable tap feel on mobile */
-    * { -webkit-tap-highlight-color: transparent; }
-    body { overscroll-behavior-y: none; }
+    /* ============ Design tokens (auto light/dark) ============ */
+    :root {
+      --bg: #f1f5f9;
+      --bg-soft: #e2e8f0;
+      --card: #ffffff;
+      --card-translucent: rgba(255, 255, 255, 0.92);
+      --text: #1e293b;
+      --text-2: #64748b;
+      --text-3: #94a3b8;
+      --border: #e2e8f0;
+      --brand: #4f46e5;
+      --brand-strong: #4338ca;
+      --brand-weak: #eef2ff;
+      --success: #10b981;
+      --success-strong: #047857;
+      --success-weak: #ecfdf5;
+      --success-border: #a7f3d0;
+      --success-badge: #d1fae5;
+      --danger: #dc2626;
+      --danger-weak: #fee2e2;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --bg-soft: #293548;
+        --card: #1e293b;
+        --card-translucent: rgba(15, 23, 42, 0.92);
+        --text: #f1f5f9;
+        --text-2: #94a3b8;
+        --text-3: #64748b;
+        --border: #334155;
+        --brand: #6366f1;
+        --brand-strong: #a5b4fc;
+        --brand-weak: rgba(99, 102, 241, 0.18);
+        --success: #10b981;
+        --success-strong: #6ee7b7;
+        --success-weak: rgba(16, 185, 129, 0.12);
+        --success-border: rgba(16, 185, 129, 0.35);
+        --success-badge: rgba(16, 185, 129, 0.25);
+        --danger: #f87171;
+        --danger-weak: rgba(239, 68, 68, 0.18);
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      }
+    }
 
-    /* Press-down feedback on med buttons */
-    .med-btn { transition: transform 0.08s ease, box-shadow 0.08s ease; touch-action: manipulation; }
+    /* ============ Base ============ */
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overscroll-behavior-y: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+    ul { margin: 0; padding: 0; list-style: none; }
+    p { margin: 0; }
+    .hidden { display: none !important; }
+
+    .app {
+      max-width: 26rem;
+      margin: 0 auto;
+      padding: 0 1.25rem calc(5.75rem + env(safe-area-inset-bottom));
+    }
+
+    /* ============ Header ============ */
+    header { padding: 1.5rem 0 0.5rem; }
+    header h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+    .subtitle { color: var(--text-2); font-size: 0.875rem; margin-top: 2px; }
+
+    /* ============ Med buttons ============ */
+    .group-title {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-3); margin: 1.4rem 0 0.6rem;
+    }
+    .med-btn {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      gap: 0.75rem; text-align: left;
+      background: var(--card); border: 2px solid transparent; border-radius: 1.25rem;
+      padding: 1.05rem 1.25rem; box-shadow: var(--shadow);
+      transition: transform 0.08s ease; margin-bottom: 0.75rem;
+    }
     .med-btn:active { transform: scale(0.97); }
+    .med-btn.taken { background: var(--success-weak); border-color: var(--success-border); }
+    .med-btn.dimmed { opacity: 0.6; }
+    .med-info { min-width: 0; }
+    .med-name {
+      display: block; font-size: 1.12rem; font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .med-sub { display: block; font-size: 0.9rem; color: var(--text-2); margin-top: 1px; }
+    .med-last { display: block; font-size: 0.78rem; color: var(--text-3); margin-top: 2px; }
+    .taken .med-name { color: var(--success-strong); }
+    .taken .med-last { color: var(--success-strong); }
+    .med-side { flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; }
+    .med-count {
+      font-size: 0.8rem; font-weight: 700; color: var(--success-strong);
+      background: var(--success-badge); border-radius: 999px; padding: 0.25rem 0.6rem;
+    }
+    .med-plus {
+      width: 2.9rem; height: 2.9rem; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.35rem; background: var(--brand-weak); color: var(--brand);
+    }
+    .taken .med-plus { background: var(--success); color: #fff; }
 
-    /* Success pulse ring played on the button after logging */
+    /* ============ Cards / forms ============ */
+    .card {
+      background: var(--card); border-radius: 1.25rem;
+      padding: 1.25rem; box-shadow: var(--shadow); margin-top: 1rem;
+    }
+    .card h3 { margin: 0 0 0.25rem; font-size: 1rem; }
+    .card .hint { font-size: 0.85rem; color: var(--text-2); margin-bottom: 1rem; }
+    .field { margin-bottom: 1rem; }
+    .label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.35rem; }
+    .label .soft { font-weight: 400; color: var(--text-3); }
+    .input {
+      width: 100%; font-size: 1.05rem; padding: 0.8rem 1rem;
+      border-radius: 0.9rem; border: 2px solid var(--border);
+      background: var(--card); color: var(--text); outline: none;
+    }
+    .input:focus { border-color: var(--brand); }
+    .input::placeholder { color: var(--text-3); }
+
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+    .grid7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.35rem; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+
+    .seg-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+      padding: 0.7rem 0.2rem; border-radius: 0.9rem;
+      border: 2px solid var(--border); background: transparent;
+      color: var(--text-2); font-size: 0.72rem; font-weight: 600;
+    }
+    .seg-btn.active { border-color: var(--brand); background: var(--brand-weak); color: var(--brand-strong); }
+    .seg-icon { font-size: 1.25rem; }
+
+    .day-btn {
+      padding: 0.6rem 0; border-radius: 0.7rem; border: 2px solid var(--border);
+      font-size: 0.72rem; font-weight: 700; background: transparent; color: var(--text-2);
+    }
+    .day-btn.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .chip {
+      padding: 0.5rem 0.9rem; border-radius: 999px; border: 2px solid var(--border);
+      font-size: 0.85rem; font-weight: 700; background: transparent; color: var(--text-2);
+    }
+    .chip.active { border-color: var(--brand); background: var(--brand-weak); color: var(--brand-strong); }
+
+    .btn-primary {
+      width: 100%; background: var(--brand); color: #fff; font-weight: 700;
+      font-size: 1.05rem; border: none; padding: 1rem; border-radius: 1rem;
+      transition: transform 0.08s ease;
+    }
+    .btn-primary:active { transform: scale(0.97); }
+    .btn-soft {
+      background: var(--brand-weak); color: var(--brand-strong); font-weight: 600;
+      border: none; border-radius: 0.8rem; padding: 0.6rem 1rem; font-size: 0.9rem;
+      transition: transform 0.08s ease;
+    }
+    .btn-soft:active { transform: scale(0.95); }
+    .btn-block {
+      display: block; width: 100%; text-align: center; padding: 0.9rem;
+      border-radius: 0.9rem; border: none; font-weight: 600; font-size: 0.95rem;
+      transition: transform 0.08s ease;
+    }
+    .btn-block:active { transform: scale(0.97); }
+    .btn-block.indigo { background: var(--brand-weak); color: var(--brand-strong); }
+    .btn-block.plain { background: var(--bg-soft); color: var(--text); cursor: pointer; }
+    .btn-ghost { background: none; border: none; color: var(--text-2); font-weight: 600; width: 100%; padding: 0.6rem; }
+    .warning-text { font-size: 0.85rem; font-weight: 600; color: var(--danger); margin-top: 0.5rem; }
+
+    .icon-btn {
+      width: 2.75rem; height: 2.75rem; border-radius: 0.9rem; border: none;
+      display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
+      background: var(--bg-soft); flex-shrink: 0;
+      transition: transform 0.08s ease;
+    }
+    .icon-btn:active { transform: scale(0.92); }
+    .icon-btn.danger { background: var(--danger-weak); }
+
+    /* ============ Lists (history + med list) ============ */
+    .row {
+      background: var(--card); border-radius: 1rem; padding: 0.75rem 1rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+      box-shadow: var(--shadow); margin-bottom: 0.5rem;
+    }
+    .row-main { min-width: 0; }
+    .row-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row-title .soft { font-weight: 400; color: var(--text-2); }
+    .row-sub { font-size: 0.85rem; color: var(--text-3); margin-top: 1px; }
+    .row-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin: 1.25rem 0 0.75rem; }
+    .section-head h2 { margin: 0; font-size: 1.1rem; }
+    .muted-note { color: var(--text-3); font-size: 0.875rem; padding: 0.5rem 0; }
+
+    details summary { cursor: pointer; user-select: none; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    .details-title { font-size: 1.05rem; font-weight: 700; margin: 1.25rem 0 0.5rem; }
+    .details-title .soft { font-weight: 400; font-size: 0.85rem; color: var(--text-3); }
+    .offday-summary {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-3); margin: 1.25rem 0 0.6rem;
+    }
+
+    /* ============ Empty state ============ */
+    .empty { text-align: center; margin-top: 3.5rem; padding: 0 1rem; }
+    .empty-emoji { font-size: 3.5rem; margin-bottom: 0.75rem; }
+    .empty h2 { margin: 0 0 0.5rem; font-size: 1.2rem; }
+    .empty p { color: var(--text-2); margin-bottom: 1.25rem; }
+    .empty .btn-primary { width: auto; padding: 1rem 2rem; }
+
+    /* ============ Bottom tab bar ============ */
+    .tabbar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+      background: var(--card-translucent);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      padding: 0.35rem 0 calc(0.35rem + env(safe-area-inset-bottom));
+      display: flex; justify-content: center;
+    }
+    .tabbar-inner { display: flex; width: 100%; max-width: 26rem; }
+    .tab {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: none; border: none; color: var(--text-3);
+      font-size: 0.68rem; font-weight: 600; padding: 0.3rem 0;
+    }
+    .tab.active { color: var(--brand-strong); }
+    .tab-icon { font-size: 1.35rem; line-height: 1.2; }
+
+    /* ============ Toast ============ */
+    .toast {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: calc(4.6rem + env(safe-area-inset-bottom)); z-index: 50;
+    }
+    .toast-inner {
+      background: #0f172a; color: #fff; border-radius: 1rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      padding: 0.75rem 1.25rem; display: flex; align-items: center; gap: 1rem;
+      font-weight: 500; max-width: 90vw;
+    }
+    @media (prefers-color-scheme: dark) {
+      .toast-inner { background: #f1f5f9; color: #0f172a; }
+    }
+    .toast-undo { background: none; border: none; color: var(--success); font-weight: 800; font-size: 1.05rem; padding: 0.2rem 0.4rem; }
+
+    /* ============ Animations ============ */
     @keyframes pulse-ring {
-      0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
-      100% { box-shadow: 0 0 0 18px rgba(34, 197, 94, 0); }
+      0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
+      100% { box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
     }
     .just-logged { animation: pulse-ring 0.6s ease-out; }
-
-    /* Checkmark pop-in */
     @keyframes pop-in {
-      0%   { transform: scale(0); }
-      70%  { transform: scale(1.25); }
-      100% { transform: scale(1); }
+      0% { transform: scale(0); } 70% { transform: scale(1.25); } 100% { transform: scale(1); }
     }
     .check-pop { animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
-
-    /* Confetti particles */
+    @keyframes slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+    .row.fresh { animation: slide-in 0.2s ease-out; }
     .confetti-piece {
       position: fixed; width: 9px; height: 9px; border-radius: 2px;
       pointer-events: none; z-index: 100; will-change: transform, opacity;
     }
-
-    /* History rows slide in gently */
-    @keyframes slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-    .log-row { animation: slide-in 0.2s ease-out; }
-
-    /* Vestibular-safe: kill decorative motion when the OS asks for it */
     @media (prefers-reduced-motion: reduce) {
-      .just-logged, .check-pop, .log-row { animation: none; }
-      .med-btn:active { transform: none; }
+      .just-logged, .check-pop, .row.fresh { animation: none; }
+      .med-btn:active, .btn-primary:active { transform: none; }
     }
-
-    /* Respect the phone notch / home bar */
-    .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen">
+<body>
 
-  <div class="mx-auto max-w-md min-h-screen flex flex-col">
-
-    <!-- ============ HEADER ============ -->
-    <header class="px-5 pt-6 pb-3 flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">Dose Recorder</h1>
-        <p id="header-date" class="text-sm text-slate-500"></p>
-      </div>
-      <button id="nav-settings" aria-label="Settings"
-        class="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-2xl active:scale-95 transition-transform">
-        ⚙️
-      </button>
+  <div class="app">
+    <header>
+      <h1>Dose Recorder</h1>
+      <p id="header-date" class="subtitle"></p>
     </header>
 
-    <!-- ============ DASHBOARD MODE ============ -->
-    <main id="view-dashboard" class="flex-1 px-5 pb-8 safe-bottom">
-      <div id="med-buttons" class="space-y-6 mt-2"></div>
+    <!-- ============ HOME (dashboard) ============ -->
+    <main id="view-home">
+      <div id="med-buttons"></div>
 
-      <!-- Weekly meds not scheduled today, tucked away but still reachable -->
-      <details id="offday-details" class="hidden mt-6">
-        <summary class="text-sm font-bold uppercase tracking-wider text-slate-400 cursor-pointer select-none list-none">
-          🗓 Not scheduled today <span id="offday-count" class="font-normal normal-case tracking-normal"></span>
-        </summary>
-        <div id="offday-buttons" class="space-y-3 mt-3"></div>
+      <details id="offday-details" class="hidden">
+        <summary class="offday-summary">🗓 Not scheduled today <span id="offday-count"></span></summary>
+        <div id="offday-buttons"></div>
       </details>
 
-      <!-- Empty state: shown only when no meds are configured -->
-      <div id="empty-state" class="hidden text-center mt-16 px-6">
-        <div class="text-6xl mb-4">💊</div>
-        <h2 class="text-xl font-semibold mb-2">No medications yet</h2>
-        <p class="text-slate-500 mb-6">Add your medications once, then logging a dose is a single tap.</p>
-        <button id="empty-add-btn"
-          class="bg-brand-600 text-white font-semibold text-lg px-8 py-4 rounded-2xl shadow-lg shadow-brand-600/30 active:scale-95 transition-transform">
-          Add a medication
-        </button>
+      <div id="empty-state" class="empty hidden">
+        <div class="empty-emoji">💊</div>
+        <h2>No medications yet</h2>
+        <p>Add your medications once, then logging a dose is a single tap.</p>
+        <button id="empty-add-btn" class="btn-primary">Add a medication</button>
       </div>
-
-      <!-- ============ HISTORY ============ -->
-      <section id="history-section" class="mt-10">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-bold">Today</h2>
-          <button id="export-btn"
-            class="text-sm font-semibold text-brand-600 bg-brand-50 px-4 py-2 rounded-xl active:scale-95 transition-transform">
-            Export CSV
-          </button>
-        </div>
-        <ul id="today-logs" class="space-y-2"></ul>
-        <p id="today-empty" class="text-slate-400 text-sm py-3">Nothing logged yet today.</p>
-
-        <details id="past-logs-details" class="mt-6">
-          <summary class="text-lg font-bold cursor-pointer select-none list-none flex items-center gap-2">
-            <span>Past days</span>
-            <span id="past-count" class="text-sm font-normal text-slate-400"></span>
-          </summary>
-          <ul id="past-logs" class="space-y-2 mt-3"></ul>
-        </details>
-      </section>
     </main>
 
-    <!-- ============ SETUP MODE ============ -->
-    <main id="view-setup" class="hidden flex-1 px-5 pb-8 safe-bottom">
-      <div class="flex items-center gap-3 mt-2 mb-6">
-        <button id="nav-back" aria-label="Back to dashboard"
-          class="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xl active:scale-95 transition-transform">
-          ←
-        </button>
-        <h2 class="text-xl font-bold">Manage medications</h2>
+    <!-- ============ HISTORY ============ -->
+    <main id="view-history" class="hidden">
+      <div class="section-head">
+        <h2>Today</h2>
+        <button id="export-btn" class="btn-soft">Export CSV</button>
       </div>
+      <ul id="today-logs"></ul>
+      <p id="today-empty" class="muted-note">Nothing logged yet today.</p>
 
-      <form id="med-form" class="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+      <details id="past-logs-details" class="hidden">
+        <summary class="details-title">Past days <span id="past-count" class="soft"></span></summary>
+        <ul id="past-logs"></ul>
+      </details>
+    </main>
+
+    <!-- ============ SETTINGS ============ -->
+    <main id="view-settings" class="hidden">
+      <form id="med-form" class="card">
+        <h3 id="form-title">Add a medication</h3>
+        <p class="hint">Pick from the list or type anything.</p>
         <input type="hidden" id="med-id" />
 
-        <div>
-          <label for="med-name" class="block text-sm font-semibold text-slate-600 mb-1">Medication name</label>
-          <input id="med-name" type="text" required list="med-suggestions" placeholder="Type or pick from list…" autocomplete="off"
-            class="w-full text-lg px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:outline-none" />
+        <div class="field">
+          <label class="label" for="med-name">Medication name</label>
+          <input id="med-name" class="input" type="text" required list="med-suggestions"
+            placeholder="Type or pick from list…" autocomplete="off" />
           <datalist id="med-suggestions"></datalist>
         </div>
 
-        <div>
-          <label for="med-dose" class="block text-sm font-semibold text-slate-600 mb-1">Dosage</label>
-          <!-- One-tap typical strengths for the selected medication -->
-          <div id="dose-chips" class="hidden flex-wrap gap-2 mb-2"></div>
-          <input id="med-dose" type="text" required placeholder="e.g. 20mg (or tap a dose above)" autocomplete="off"
-            class="w-full text-lg px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:outline-none" />
+        <div class="field">
+          <label class="label" for="med-dose">Dosage</label>
+          <div id="dose-chips" class="chips hidden"></div>
+          <input id="med-dose" class="input" type="text" required
+            placeholder="e.g. 20mg (or tap a dose above)" autocomplete="off" />
         </div>
 
-        <div>
-          <span class="block text-sm font-semibold text-slate-600 mb-2">Schedule</span>
-          <div id="schedule-picker" class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Schedule">
-            <!-- buttons injected by JS -->
-          </div>
-          <div id="day-picker-wrap" class="hidden mt-3">
-            <span class="block text-sm font-semibold text-slate-600 mb-2">On which days?</span>
-            <div id="day-picker" class="grid grid-cols-7 gap-1.5" role="group" aria-label="Days of the week">
-              <!-- buttons injected by JS -->
-            </div>
-            <p id="day-warning" class="hidden text-sm font-semibold text-red-500 mt-2">Pick at least one day.</p>
+        <div class="field">
+          <span class="label">Schedule</span>
+          <div id="schedule-picker" class="grid3" role="radiogroup" aria-label="Schedule"></div>
+          <div id="day-picker-wrap" class="hidden" style="margin-top:0.75rem">
+            <span class="label">On which days?</span>
+            <div id="day-picker" class="grid7" role="group" aria-label="Days of the week"></div>
+            <p id="day-warning" class="warning-text hidden">Pick at least one day.</p>
           </div>
         </div>
 
-        <div>
-          <span class="block text-sm font-semibold text-slate-600 mb-2">Time of day <span class="font-normal text-slate-400">(for grouping)</span></span>
-          <div id="time-picker" class="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Time of day">
-            <!-- buttons injected by JS -->
-          </div>
+        <div class="field">
+          <span class="label">Time of day <span class="soft">(for grouping)</span></span>
+          <div id="time-picker" class="grid4" role="radiogroup" aria-label="Time of day"></div>
         </div>
 
-        <button type="submit" id="med-save-btn"
-          class="w-full bg-brand-600 text-white font-semibold text-lg py-4 rounded-2xl shadow-lg shadow-brand-600/30 active:scale-95 transition-transform">
-          Add medication
-        </button>
-        <button type="button" id="med-cancel-btn"
-          class="hidden w-full text-slate-500 font-semibold py-2">
-          Cancel editing
-        </button>
+        <button type="submit" id="med-save-btn" class="btn-primary">Add medication</button>
+        <button type="button" id="med-cancel-btn" class="btn-ghost hidden">Cancel editing</button>
       </form>
 
-      <ul id="med-list" class="mt-6 space-y-2"></ul>
+      <ul id="med-list" style="margin-top:1rem"></ul>
 
-      <!-- ============ BACKUP & RESTORE ============ -->
-      <section class="mt-8 bg-white rounded-2xl shadow-sm p-5">
-        <h3 class="font-bold mb-1">Backup &amp; restore</h3>
-        <p class="text-sm text-slate-500 mb-4">Saves your medications <em>and</em> full history as one JSON file — use it to move devices or recover data.</p>
-        <div class="grid grid-cols-2 gap-3">
-          <button id="backup-export-btn"
-            class="bg-brand-50 text-brand-700 font-semibold py-3.5 rounded-xl active:scale-95 transition-transform">
-            ⬇️ Export backup
-          </button>
-          <label for="backup-import-input"
-            class="bg-slate-50 text-slate-700 font-semibold py-3.5 rounded-xl text-center cursor-pointer active:scale-95 transition-transform">
-            ⬆️ Import backup
-          </label>
+      <section class="card">
+        <h3>Backup &amp; restore</h3>
+        <p class="hint">Saves your medications <em>and</em> full history as one JSON file — use it to move devices or recover data.</p>
+        <div class="grid2">
+          <button id="backup-export-btn" class="btn-block indigo">⬇️ Export backup</button>
+          <label for="backup-import-input" class="btn-block plain">⬆️ Import backup</label>
           <input id="backup-import-input" type="file" accept=".json,application/json" class="hidden" />
         </div>
+      </section>
+
+      <section class="card">
+        <h3>Install on your phone</h3>
+        <p class="hint" style="margin-bottom:0">
+          Open this app's link on your phone, then:<br />
+          <strong>iPhone:</strong> Share button → <em>Add to Home Screen</em>.<br />
+          <strong>Android:</strong> browser menu → <em>Install app</em>.<br />
+          It launches full-screen from its own icon and works offline.
+        </p>
       </section>
     </main>
   </div>
 
-  <!-- Toast: undo after logging, or plain status messages -->
-  <div id="toast" role="status" aria-live="polite" class="fixed left-1/2 -translate-x-1/2 bottom-6 hidden z-50 safe-bottom">
-    <div class="bg-slate-900 text-white rounded-2xl shadow-xl px-5 py-3 flex items-center gap-4">
-      <span id="toast-text" class="font-medium"></span>
-      <button id="toast-undo" class="text-emerald-400 font-bold px-2 py-1 text-lg">Undo</button>
+  <!-- ============ Tab bar ============ -->
+  <nav class="tabbar" aria-label="Main">
+    <div class="tabbar-inner">
+      <button class="tab" data-view="home"><span class="tab-icon">💊</span>Meds</button>
+      <button class="tab" data-view="history"><span class="tab-icon">🕐</span>History</button>
+      <button class="tab" data-view="settings"><span class="tab-icon">⚙️</span>Settings</button>
+    </div>
+  </nav>
+
+  <!-- ============ Toast ============ -->
+  <div id="toast" role="status" aria-live="polite" class="toast hidden">
+    <div class="toast-inner">
+      <span id="toast-text"></span>
+      <button id="toast-undo" class="toast-undo">Undo</button>
     </div>
   </div>
 
@@ -452,64 +650,85 @@ const escapeHtml = (s) =>
 const timesLoggedToday = (medId) =>
   logs.filter((l) => l.medId === medId && dayKey(l.ts) === todayKey()).length;
 
+// "Last taken 2h 15m ago" — the anti-"did I already take it?" line
+function lastTakenText(medId) {
+  let last = 0;
+  for (const l of logs) if (l.medId === medId && l.ts > last) last = l.ts;
+  if (!last) return '';
+  const mins = Math.floor((Date.now() - last) / 60000);
+  if (mins < 1) return 'Last taken just now';
+  if (mins < 60) return `Last taken ${mins}m ago`;
+  if (dayKey(last) === todayKey()) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `Last taken ${h}h${m ? ' ' + m + 'm' : ''} ago`;
+  }
+  if (dayKey(last) === dayKey(Date.now() - 86400000)) return `Last taken yesterday, ${fmtTime(last)}`;
+  return `Last taken ${new Date(last).toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+}
+
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 /* ================================================================
-   View switching
+   View switching (bottom tab bar)
    ================================================================ */
 const $ = (id) => document.getElementById(id);
 
 function showView(view) {
-  $('view-dashboard').classList.toggle('hidden', view !== 'dashboard');
-  $('view-setup').classList.toggle('hidden', view !== 'setup');
-  if (view === 'dashboard') renderDashboard();
-  if (view === 'setup') renderMedList();
+  for (const v of ['home', 'history', 'settings']) {
+    $('view-' + v).classList.toggle('hidden', v !== view);
+  }
+  for (const tab of document.querySelectorAll('.tab')) {
+    const active = tab.dataset.view === view;
+    tab.classList.toggle('active', active);
+    if (active) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  }
+  if (view === 'home') renderHome();
+  if (view === 'history') renderHistory();
+  if (view === 'settings') renderMedList();
   window.scrollTo(0, 0);
 }
 
-$('nav-settings').addEventListener('click', () => showView('setup'));
-$('nav-back').addEventListener('click', () => { resetForm(); showView('dashboard'); });
-$('empty-add-btn').addEventListener('click', () => showView('setup'));
+for (const tab of document.querySelectorAll('.tab')) {
+  tab.addEventListener('click', () => showView(tab.dataset.view));
+}
+$('empty-add-btn').addEventListener('click', () => showView('settings'));
 
 /* ================================================================
-   Dashboard — one tap = one logged dose
+   Home — one tap = one logged dose
    ================================================================ */
 function medButton(med, { dimmed = false } = {}) {
   const count = timesLoggedToday(med.id);
   const taken = count > 0;
   const isPrn = (med.schedule || {}).type === 'prn';
+  const lastText = lastTakenText(med.id);
 
   const btn = document.createElement('button');
   btn.dataset.medId = med.id;
-  btn.className =
-    'med-btn w-full text-left rounded-2xl px-5 py-5 shadow-sm flex items-center justify-between gap-3 ' +
-    (taken ? 'bg-emerald-50 border-2 border-emerald-200' : 'bg-white border-2 border-transparent') +
-    (dimmed ? ' opacity-60' : '');
+  btn.className = 'med-btn' + (taken ? ' taken' : '') + (dimmed ? ' dimmed' : '');
   btn.setAttribute('aria-label',
     `Log ${med.name} ${med.dose}` + (taken ? `, already taken ${count} time${count > 1 ? 's' : ''} today` : ''));
   btn.innerHTML = `
-    <span class="min-w-0">
-      <span class="block text-xl font-bold truncate ${taken ? 'text-emerald-800' : 'text-slate-800'}">${escapeHtml(med.name)}</span>
-      <span class="block text-base ${taken ? 'text-emerald-600' : 'text-slate-500'}">${escapeHtml(med.dose)}${isPrn ? ' · as needed' : ''}</span>
+    <span class="med-info">
+      <span class="med-name">${escapeHtml(med.name)}</span>
+      <span class="med-sub">${escapeHtml(med.dose)}${isPrn ? ' · as needed' : ''}</span>
+      ${lastText ? `<span class="med-last">${lastText}</span>` : ''}
     </span>
-    <span class="shrink-0 flex items-center gap-2">
-      ${count > 1 ? `<span class="text-sm font-bold text-emerald-600 bg-emerald-100 rounded-full px-2.5 py-1">×${count}</span>` : ''}
-      <span class="w-12 h-12 rounded-full flex items-center justify-center text-2xl
-        ${taken ? 'bg-emerald-500 text-white check-pop' : 'bg-brand-50 text-brand-600'}">
-        ${taken ? '✓' : '+'}
-      </span>
+    <span class="med-side">
+      ${count > 1 ? `<span class="med-count">×${count}</span>` : ''}
+      <span class="med-plus ${taken ? 'check-pop' : ''}">${taken ? '✓' : '+'}</span>
     </span>`;
   btn.addEventListener('click', (e) => logDose(med, e));
   return btn;
 }
 
-function renderDashboard() {
+function renderHome() {
   $('header-date').textContent = fmtDate(Date.now());
 
   const container = $('med-buttons');
   container.innerHTML = '';
   $('empty-state').classList.toggle('hidden', meds.length > 0);
-  $('history-section').classList.toggle('hidden', meds.length === 0 && logs.length === 0);
 
   const dueToday = meds.filter(isScheduledToday);
   const offDay = meds.filter((m) => !isScheduledToday(m));
@@ -518,17 +737,12 @@ function renderDashboard() {
     const groupMeds = dueToday.filter((m) => (m.timeOfDay || 'anytime') === group.key);
     if (!groupMeds.length) continue;
 
-    const section = document.createElement('section');
-    section.innerHTML = `
-      <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-2">
-        ${group.icon} ${group.label}
-      </h2>`;
+    const title = document.createElement('h2');
+    title.className = 'group-title';
+    title.textContent = `${group.icon} ${group.label}`;
+    container.appendChild(title);
 
-    const list = document.createElement('div');
-    list.className = 'space-y-3';
-    for (const med of groupMeds) list.appendChild(medButton(med));
-    section.appendChild(list);
-    container.appendChild(section);
+    for (const med of groupMeds) container.appendChild(medButton(med));
   }
 
   // Weekly meds whose day isn't today: hidden behind a collapsed toggle,
@@ -538,8 +752,6 @@ function renderDashboard() {
   const offList = $('offday-buttons');
   offList.innerHTML = '';
   for (const med of offDay) offList.appendChild(medButton(med, { dimmed: true }));
-
-  renderHistory();
 }
 
 let undoTimer = null;
@@ -555,14 +767,14 @@ function logDose(med, event) {
   if (navigator.vibrate) navigator.vibrate(30);
   confettiBurst(event.clientX || innerWidth / 2, event.clientY || innerHeight / 2);
 
-  renderDashboard();
+  renderHome();
   showToast(`${med.name} logged · ${fmtTime(entry.ts)}`, { undoable: true });
   pulseButtonFor(med.id);
 }
 
 // Re-find the freshly rendered button and play the success ring on it
 function pulseButtonFor(medId) {
-  const btn = document.querySelector(`#med-buttons [data-med-id="${medId}"], #offday-buttons [data-med-id="${medId}"]`);
+  const btn = document.querySelector(`#view-home [data-med-id="${medId}"]`);
   if (!btn) return;
   btn.classList.add('just-logged');
   setTimeout(() => btn.classList.remove('just-logged'), 700);
@@ -583,7 +795,7 @@ $('toast-undo').addEventListener('click', () => {
     lastLogId = null;
   }
   $('toast').classList.add('hidden');
-  renderDashboard();
+  renderHome();
 });
 
 /* ================================================================
@@ -618,7 +830,7 @@ function confettiBurst(x, y) {
 }
 
 /* ================================================================
-   History
+   History tab
    ================================================================ */
 function renderHistory() {
   const today = [];
@@ -643,22 +855,19 @@ function renderHistory() {
 
 function logRowHtml(log, withDate = false) {
   return `
-    <li class="log-row bg-white rounded-xl px-4 py-3 flex items-center justify-between gap-3 shadow-sm">
-      <div class="min-w-0">
-        <p class="font-semibold truncate">${escapeHtml(log.name)} <span class="font-normal text-slate-500">${escapeHtml(log.dose)}</span></p>
-        <p class="text-sm text-slate-400">${withDate ? fmtDate(log.ts) + ' · ' : ''}${fmtTime(log.ts)}</p>
+    <li class="row fresh">
+      <div class="row-main">
+        <p class="row-title">${escapeHtml(log.name)} <span class="soft">${escapeHtml(log.dose)}</span></p>
+        <p class="row-sub">${withDate ? fmtDate(log.ts) + ' · ' : ''}${fmtTime(log.ts)}</p>
       </div>
-      <button data-delete-log="${log.id}" aria-label="Delete this entry"
-        class="shrink-0 w-11 h-11 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center text-lg active:scale-95 active:bg-red-50 active:text-red-500 transition-all">
-        🗑
-      </button>
+      <button data-delete-log="${log.id}" aria-label="Delete this entry" class="icon-btn">🗑</button>
     </li>`;
 }
 
 function deleteLog(id) {
   logs = logs.filter((l) => l.id !== id);
   save(STORE.LOGS, logs);
-  renderDashboard();
+  renderHistory();
 }
 
 /* ================================================================
@@ -745,14 +954,13 @@ $('backup-import-input').addEventListener('change', (e) => {
     save(STORE.LOGS, logs);
     resetForm();
     renderMedList();
-    renderDashboard();
     showToast('Backup restored ✓');
   };
   reader.readAsText(file);
 });
 
 /* ================================================================
-   Setup mode — add / edit / delete medications
+   Settings — add / edit / delete medications
    ================================================================ */
 let selectedTime = 'anytime';
 let selectedSchedule = 'daily';
@@ -769,16 +977,12 @@ function renderDoseChips() {
   const wrap = $('dose-chips');
   wrap.innerHTML = '';
   wrap.classList.toggle('hidden', !doses);
-  wrap.classList.toggle('flex', !!doses);
   if (!doses) return;
 
   for (const dose of doses) {
     const chip = document.createElement('button');
     chip.type = 'button';
-    const active = $('med-dose').value.trim() === dose;
-    chip.className =
-      'px-3.5 py-2 rounded-full text-sm font-bold border-2 transition-colors ' +
-      (active ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600');
+    chip.className = 'chip' + ($('med-dose').value.trim() === dose ? ' active' : '');
     chip.textContent = dose;
     chip.addEventListener('click', () => {
       $('med-dose').value = dose;
@@ -799,12 +1003,8 @@ function renderTimePicker() {
     b.type = 'button';
     b.setAttribute('role', 'radio');
     b.setAttribute('aria-checked', String(selectedTime === g.key));
-    b.className =
-      'flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition-colors ' +
-      (selectedTime === g.key
-        ? 'border-brand-500 bg-brand-50 text-brand-700'
-        : 'border-slate-200 text-slate-500');
-    b.innerHTML = `<span class="text-xl">${g.icon}</span>${g.label}`;
+    b.className = 'seg-btn' + (selectedTime === g.key ? ' active' : '');
+    b.innerHTML = `<span class="seg-icon">${g.icon}</span>${g.label}`;
     b.addEventListener('click', () => { selectedTime = g.key; renderTimePicker(); });
     picker.appendChild(b);
   }
@@ -818,12 +1018,8 @@ function renderSchedulePicker() {
     b.type = 'button';
     b.setAttribute('role', 'radio');
     b.setAttribute('aria-checked', String(selectedSchedule === s.key));
-    b.className =
-      'flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition-colors ' +
-      (selectedSchedule === s.key
-        ? 'border-brand-500 bg-brand-50 text-brand-700'
-        : 'border-slate-200 text-slate-500');
-    b.innerHTML = `<span class="text-xl">${s.icon}</span>${s.label}`;
+    b.className = 'seg-btn' + (selectedSchedule === s.key ? ' active' : '');
+    b.innerHTML = `<span class="seg-icon">${s.icon}</span>${s.label}`;
     b.addEventListener('click', () => {
       selectedSchedule = s.key;
       renderSchedulePicker();
@@ -843,9 +1039,7 @@ function renderDayPicker() {
     b.type = 'button';
     const active = selectedDays.includes(day);
     b.setAttribute('aria-pressed', String(active));
-    b.className =
-      'py-2.5 rounded-lg border-2 text-xs font-bold transition-colors ' +
-      (active ? 'border-brand-500 bg-brand-500 text-white' : 'border-slate-200 text-slate-500');
+    b.className = 'day-btn' + (active ? ' active' : '');
     b.textContent = label;
     b.addEventListener('click', () => {
       selectedDays = active ? selectedDays.filter((d) => d !== day) : [...selectedDays, day];
@@ -863,6 +1057,7 @@ function resetForm() {
   selectedTime = 'anytime';
   selectedSchedule = 'daily';
   selectedDays = [];
+  $('form-title').textContent = 'Add a medication';
   $('med-save-btn').textContent = 'Add medication';
   $('med-cancel-btn').classList.add('hidden');
   renderDoseChips();
@@ -906,18 +1101,15 @@ function renderMedList() {
   for (const med of meds) {
     const group = TIME_GROUPS.find((g) => g.key === (med.timeOfDay || 'anytime'));
     const li = document.createElement('li');
-    li.className = 'bg-white rounded-xl px-4 py-3 flex items-center justify-between gap-3 shadow-sm';
+    li.className = 'row';
     li.innerHTML = `
-      <div class="min-w-0">
-        <p class="font-semibold truncate">${escapeHtml(med.name)}</p>
-        <p class="text-sm text-slate-500">${escapeHtml(med.dose)} · ${group.icon} ${group.label}</p>
-        <p class="text-sm text-slate-400">${scheduleSummary(med)}</p>
+      <div class="row-main">
+        <p class="row-title">${escapeHtml(med.name)}</p>
+        <p class="row-sub">${escapeHtml(med.dose)} · ${group.icon} ${group.label} · ${scheduleSummary(med)}</p>
       </div>
-      <div class="shrink-0 flex gap-2">
-        <button data-edit="${med.id}" aria-label="Edit ${escapeHtml(med.name)}"
-          class="w-11 h-11 rounded-xl bg-slate-50 flex items-center justify-center text-lg active:scale-95 transition-transform">✏️</button>
-        <button data-del="${med.id}" aria-label="Delete ${escapeHtml(med.name)}"
-          class="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center text-lg active:scale-95 transition-transform">🗑</button>
+      <div class="row-actions">
+        <button data-edit="${med.id}" aria-label="Edit ${escapeHtml(med.name)}" class="icon-btn">✏️</button>
+        <button data-del="${med.id}" aria-label="Delete ${escapeHtml(med.name)}" class="icon-btn danger">🗑</button>
       </div>`;
     list.appendChild(li);
   }
@@ -932,6 +1124,7 @@ function renderMedList() {
       selectedTime = med.timeOfDay || 'anytime';
       selectedSchedule = (med.schedule || {}).type || 'daily';
       selectedDays = [...((med.schedule || {}).days || [])];
+      $('form-title').textContent = 'Edit medication';
       $('med-save-btn').textContent = 'Save changes';
       $('med-cancel-btn').classList.remove('hidden');
       renderDoseChips();
@@ -956,16 +1149,18 @@ function renderMedList() {
    ================================================================ */
 renderTimePicker();
 renderSchedulePicker();
-showView(meds.length ? 'dashboard' : 'setup');
+showView(meds.length ? 'home' : 'settings');
 
-// Roll the dashboard over at midnight so "taken today" (and weekly
-// scheduling) refresh without a reload
+// Refresh the home screen every 30s while visible: keeps the
+// "last taken Xm ago" lines current and rolls the day over at midnight.
 setInterval(() => {
-  if ($('header-date').textContent !== fmtDate(Date.now()) &&
-      !$('view-dashboard').classList.contains('hidden')) {
-    renderDashboard();
-  }
-}, 60 * 1000);
+  if (!$('view-home').classList.contains('hidden')) renderHome();
+}, 30 * 1000);
+
+// Offline support: register the service worker (skipped on file://).
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
 </script>
 </body>
 </html>

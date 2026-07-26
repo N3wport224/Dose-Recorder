@@ -1,40 +1,42 @@
 # Dose Recorder 💊
 
-A zero-friction medication tracker built for ADHD brains. **One tap logs a dose** — no dialogs, no confirmations, no multi-step flows.
+A zero-friction medication tracker built for ADHD brains, packaged as an **installable phone app (PWA)**. **One tap logs a dose** — no dialogs, no confirmations, no multi-step flows.
 
-Everything is a single `index.html` file: HTML + Tailwind CSS + vanilla JavaScript, with all data stored privately in your browser's LocalStorage. Nothing ever leaves your device.
+Plain HTML + CSS + vanilla JavaScript, no frameworks and no build step. All data stays in your browser's LocalStorage — no accounts, no servers, no analytics. Works fully offline once installed.
 
-## How to run
+## Put it on your phone (recommended)
 
-**Option 1 — just open it:**
-Download `index.html` and double-click it. It runs entirely in the browser.
+1. **Host it** — easiest is GitHub Pages: repo **Settings → Pages → Deploy from a branch → `main` / root**. Your app appears at `https://<username>.github.io/Dose-Recorder/`.
+2. **Open that link on your phone**, then:
+   - **iPhone:** Share button → *Add to Home Screen*
+   - **Android:** browser menu → *Install app*
+3. It now launches full-screen from its own icon, with a splash screen, and **works with no internet** thanks to the service worker.
 
-**Option 2 — serve it locally** (nicer for phones on the same Wi-Fi):
+You can also just open `index.html` directly on a computer — everything works except offline caching (which needs http hosting).
 
-```bash
-python3 -m http.server 8000
-# then open http://localhost:8000 on your computer,
-# or http://<your-computer-ip>:8000 on your phone
-```
-
-**Option 3 — make it feel like a native app:**
-Host it anywhere (GitHub Pages works great), open it on your phone, then use *Add to Home Screen* in Safari/Chrome. It opens full-screen with big thumb-reachable buttons.
-
-> Note: LocalStorage is per-browser-per-device. Use the **Export CSV** button to back up or move your history.
+> LocalStorage is per-browser-per-device. Use **Settings → Export backup** to move your data between devices.
 
 ## Features
 
-- **Setup mode** — add/edit medications with name, dosage, and an optional time-of-day group (Morning / Afternoon / Evening / Anytime).
-- **Quick-select meds & doses** — the name field suggests ~120 common medications: the full range of ADHD meds (Vyvanse, Concerta, Adderall, Strattera, …) plus everyday prescriptions and supplements (antidepressants, muscle relaxants, hormones, blood pressure, thyroid, allergy, vitamins, …). Picking one shows its typical dosages as one-tap chips. Free-text entry still works for anything else.
-- **Flexible schedules** — each med is Daily, Weekly (pick specific days), or As Needed (PRN). Weekly meds only appear on the dashboard on their scheduled days; off-days they're tucked under a collapsed "Not scheduled today" toggle but stay tappable.
-- **Full backup & restore** — export a single JSON file containing all medications *and* the entire history, and import it on another device to migrate or recover everything.
-- **Dashboard** — each medication is a large, high-contrast button. One tap logs the exact date and time with the preset dose.
-- **Instant feedback** — confetti burst, green checkmark, haptic buzz (on supported phones), and an Undo toast for accidental taps.
-- **Double-dose guard** — already-taken meds turn green with a ✓ and a ×N counter, but stay tappable for split doses.
-- **History** — today's log up top, past days collapsed out of the way, per-entry delete, and one-tap CSV export for your doctor.
+- **Home tab** — each medication is a large, high-contrast button grouped by time of day. One tap logs the exact timestamp and preset dose, with confetti, a green checkmark, haptics, and an Undo toast. Each button shows **"Last taken 2h 15m ago"** — the answer to *"wait, did I already take it?"*
+- **Double-dose guard** — logged meds turn green with a ✓ and ×N counter but stay tappable for split doses; resets automatically at midnight.
+- **Quick-select meds & doses** — ~120 common medications (all ADHD meds plus everyday prescriptions and supplements) with typical strengths as one-tap chips. Free text works for anything else.
+- **Flexible schedules** — Daily, Weekly (pick days), or As Needed. Weekly meds appear only on their scheduled days; off-day meds collapse under a toggle but stay tappable.
+- **History tab** — today's log up top, past days collapsed, per-entry delete, and one-tap CSV export for your doctor.
+- **Settings tab** — manage medications and full JSON backup/restore (meds + entire history) for device migration.
+- **Native-feel polish** — bottom tab bar, automatic dark mode, safe-area support for notches, reduced-motion support, offline-first service worker.
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `index.html` | The entire app (UI, styles, logic) |
+| `manifest.webmanifest` | Install metadata (name, icon, standalone display) |
+| `sw.js` | Service worker — offline caching |
+| `icons/` | App icons (home screen, splash, maskable) |
 
 ## Data & privacy
 
 - Medications: `localStorage["doseRecorder.meds"]`
 - Logs: `localStorage["doseRecorder.logs"]`
-- No accounts, no servers, no analytics.
+- Nothing ever leaves your device. The dose quick-select lists are commonly available strengths for convenience — not dosing guidance; always follow the prescription label.
