@@ -53,6 +53,12 @@
     @keyframes slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
     .log-row { animation: slide-in 0.2s ease-out; }
 
+    /* Vestibular-safe: kill decorative motion when the OS asks for it */
+    @media (prefers-reduced-motion: reduce) {
+      .just-logged, .check-pop, .log-row { animation: none; }
+      .med-btn:active { transform: none; }
+    }
+
     /* Respect the phone notch / home bar */
     .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
   </style>
@@ -140,7 +146,7 @@
 
         <div>
           <label for="med-dose" class="block text-sm font-semibold text-slate-600 mb-1">Dosage</label>
-          <!-- One-tap typical doses for the selected medication -->
+          <!-- One-tap typical strengths for the selected medication -->
           <div id="dose-chips" class="hidden flex-wrap gap-2 mb-2"></div>
           <input id="med-dose" type="text" required placeholder="e.g. 20mg (or tap a dose above)" autocomplete="off"
             class="w-full text-lg px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:outline-none" />
@@ -199,7 +205,7 @@
   </div>
 
   <!-- Toast: undo after logging, or plain status messages -->
-  <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-6 hidden z-50 safe-bottom">
+  <div id="toast" role="status" aria-live="polite" class="fixed left-1/2 -translate-x-1/2 bottom-6 hidden z-50 safe-bottom">
     <div class="bg-slate-900 text-white rounded-2xl shadow-xl px-5 py-3 flex items-center gap-4">
       <span id="toast-text" class="font-medium"></span>
       <button id="toast-undo" class="text-emerald-400 font-bold px-2 py-1 text-lg">Undo</button>
@@ -210,26 +216,64 @@
 'use strict';
 
 /* ================================================================
-   Common ADHD medications and their typical dosages.
-   Used to pre-fill the name datalist and the one-tap dose chips —
-   free-text entry still works for anything not listed.
+   ADHD medications and their commonly available strengths.
+   Pre-fills the name datalist and the one-tap dose chips.
+   Convenience data only — NOT dosing guidance; the prescription
+   label always wins. Free-text entry works for anything not listed.
    ================================================================ */
 const MED_DB = {
-  'Methylphenidate':        ['5mg', '10mg', '20mg'],
-  'Concerta':               ['18mg', '27mg', '36mg', '54mg'],
-  'Ritalin':                ['5mg', '10mg', '20mg'],
-  'Ritalin LA':             ['10mg', '20mg', '30mg', '40mg'],
-  'Focalin':                ['2.5mg', '5mg', '10mg'],
-  'Focalin XR':             ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg', '35mg', '40mg'],
-  'Adderall':               ['5mg', '7.5mg', '10mg', '12.5mg', '15mg', '20mg', '30mg'],
-  'Adderall XR':            ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg'],
-  'Vyvanse':                ['10mg', '20mg', '30mg', '40mg', '50mg', '60mg', '70mg'],
-  'Dexedrine':              ['5mg', '10mg', '15mg'],
-  'Strattera':              ['10mg', '18mg', '25mg', '40mg', '60mg', '80mg', '100mg'],
-  'Qelbree':                ['100mg', '150mg', '200mg'],
-  'Guanfacine (Intuniv)':   ['1mg', '2mg', '3mg', '4mg'],
-  'Clonidine (Kapvay)':     ['0.1mg', '0.2mg'],
+  // --- Methylphenidate class ---
+  'Methylphenidate IR':                  ['5mg', '10mg', '20mg'],
+  'Methylphenidate ER':                  ['18mg', '27mg', '36mg', '54mg'],
+  'Concerta (methylphenidate ER)':       ['18mg', '27mg', '36mg', '54mg'],
+  'Ritalin (methylphenidate)':           ['5mg', '10mg', '20mg'],
+  'Ritalin LA':                          ['10mg', '20mg', '30mg', '40mg', '60mg'],
+  'Metadate CD':                         ['10mg', '20mg', '30mg', '40mg', '50mg', '60mg'],
+  'Aptensio XR':                         ['10mg', '15mg', '20mg', '30mg', '40mg', '50mg', '60mg'],
+  'Quillivant XR (liquid)':              ['20mg', '30mg', '40mg', '60mg'],
+  'QuilliChew ER':                       ['20mg', '30mg', '40mg'],
+  'Daytrana (patch)':                    ['10mg', '15mg', '20mg', '30mg'],
+  'Jornay PM':                           ['20mg', '40mg', '60mg', '80mg', '100mg'],
+  'Cotempla XR-ODT':                     ['8.6mg', '17.3mg', '25.9mg'],
+  'Azstarys (serdexmethylphenidate)':    ['26.1/5.2mg', '39.2/7.8mg', '52.3/10.4mg'],
+  'Focalin (dexmethylphenidate)':        ['2.5mg', '5mg', '10mg'],
+  'Focalin XR':                          ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg', '35mg', '40mg'],
+  // --- Amphetamine class ---
+  'Adderall (amphetamine salts)':        ['5mg', '7.5mg', '10mg', '12.5mg', '15mg', '20mg', '30mg'],
+  'Adderall XR':                         ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg'],
+  'Mydayis':                             ['12.5mg', '25mg', '37.5mg', '50mg'],
+  'Vyvanse (lisdexamfetamine)':          ['10mg', '20mg', '30mg', '40mg', '50mg', '60mg', '70mg'],
+  'Dexedrine (dextroamphetamine)':       ['5mg', '10mg'],
+  'Dexedrine Spansule':                  ['5mg', '10mg', '15mg'],
+  'Zenzedi':                             ['2.5mg', '5mg', '7.5mg', '10mg', '15mg', '20mg', '30mg'],
+  'Evekeo (amphetamine sulfate)':        ['5mg', '10mg'],
+  'Adzenys XR-ODT':                      ['3.1mg', '6.3mg', '9.4mg', '12.5mg', '15.7mg', '18.8mg'],
+  'Dyanavel XR (liquid)':                ['2.5mg/mL'],
+  'Xelstrym (dextroamphetamine patch)':  ['4.5mg', '9mg', '13.5mg', '18mg'],
+  // --- Non-stimulants ---
+  'Strattera (atomoxetine)':             ['10mg', '18mg', '25mg', '40mg', '60mg', '80mg', '100mg'],
+  'Qelbree (viloxazine)':                ['100mg', '150mg', '200mg'],
+  'Intuniv (guanfacine ER)':             ['1mg', '2mg', '3mg', '4mg'],
+  'Guanfacine IR':                       ['1mg', '2mg'],
+  'Kapvay (clonidine ER)':               ['0.1mg', '0.2mg'],
+  'Clonidine IR':                        ['0.1mg', '0.2mg', '0.3mg'],
+  // --- Common off-label ---
+  'Bupropion XL (Wellbutrin, off-label)': ['150mg', '300mg'],
+  'Modafinil (off-label)':               ['100mg', '200mg'],
 };
+
+// Match a typed name to a MED_DB entry: exact match first, then the
+// brand name alone ("Concerta" → "Concerta (methylphenidate ER)").
+function findMedDoses(name) {
+  const n = name.trim().toLowerCase();
+  if (!n) return null;
+  for (const key of Object.keys(MED_DB)) {
+    if (key.toLowerCase() === n || key.split(' (')[0].toLowerCase() === n) {
+      return MED_DB[key];
+    }
+  }
+  return null;
+}
 
 /* ================================================================
    Data layer — everything lives in LocalStorage
@@ -243,7 +287,13 @@ const load = (key) => {
   try { return JSON.parse(localStorage.getItem(key)) || []; }
   catch { return []; }
 };
-const save = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+
+// Surface storage failures (private browsing, quota) instead of
+// letting a "logged" dose silently vanish on the next refresh.
+const save = (key, value) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch { showToast('⚠️ Couldn’t save — storage is full or blocked'); }
+};
 
 // Meds saved by older versions have no schedule — treat them as daily.
 const withSchedule = (m) => ({ ...m, schedule: m.schedule || { type: 'daily', days: [] } });
@@ -283,7 +333,7 @@ const scheduleSummary = (med) => {
   const s = med.schedule || { type: 'daily' };
   if (s.type === 'prn') return '✋ As needed';
   if (s.type === 'weekly') {
-    const days = (s.days || []).slice().sort().map((d) => DAY_LABELS[d]).join(', ');
+    const days = (s.days || []).slice().sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join(', ');
     return `🗓 Weekly · ${days || 'no days set'}`;
   }
   return '📅 Daily';
@@ -309,6 +359,8 @@ const escapeHtml = (s) =>
 
 const timesLoggedToday = (medId) =>
   logs.filter((l) => l.medId === medId && dayKey(l.ts) === todayKey()).length;
+
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 /* ================================================================
    View switching
@@ -336,6 +388,7 @@ function medButton(med, { dimmed = false } = {}) {
   const isPrn = (med.schedule || {}).type === 'prn';
 
   const btn = document.createElement('button');
+  btn.dataset.medId = med.id;
   btn.className =
     'med-btn w-full text-left rounded-2xl px-5 py-5 shadow-sm flex items-center justify-between gap-3 ' +
     (taken ? 'bg-emerald-50 border-2 border-emerald-200' : 'bg-white border-2 border-transparent') +
@@ -354,7 +407,7 @@ function medButton(med, { dimmed = false } = {}) {
         ${taken ? '✓' : '+'}
       </span>
     </span>`;
-  btn.addEventListener('click', (e) => logDose(med, btn, e));
+  btn.addEventListener('click', (e) => logDose(med, e));
   return btn;
 }
 
@@ -400,7 +453,7 @@ function renderDashboard() {
 let undoTimer = null;
 let lastLogId = null;
 
-function logDose(med, btn, event) {
+function logDose(med, event) {
   // The one and only step: record it. No dialogs, no confirmation.
   const entry = { id: uid(), medId: med.id, name: med.name, dose: med.dose, ts: Date.now() };
   logs.push(entry);
@@ -417,16 +470,10 @@ function logDose(med, btn, event) {
 
 // Re-find the freshly rendered button and play the success ring on it
 function pulseButtonFor(medId) {
-  const med = meds.find((m) => m.id === medId);
-  if (!med) return;
-  const btns = document.querySelectorAll('#med-buttons button.med-btn, #offday-buttons button.med-btn');
-  for (const b of btns) {
-    if (b.getAttribute('aria-label').startsWith(`Log ${med.name} `)) {
-      b.classList.add('just-logged');
-      setTimeout(() => b.classList.remove('just-logged'), 700);
-      break;
-    }
-  }
+  const btn = document.querySelector(`#med-buttons [data-med-id="${medId}"], #offday-buttons [data-med-id="${medId}"]`);
+  if (!btn) return;
+  btn.classList.add('just-logged');
+  setTimeout(() => btn.classList.remove('just-logged'), 700);
 }
 
 function showToast(text, { undoable = false } = {}) {
@@ -453,6 +500,7 @@ $('toast-undo').addEventListener('click', () => {
 const CONFETTI_COLORS = ['#34d399', '#6366f1', '#fbbf24', '#f472b6', '#38bdf8'];
 
 function confettiBurst(x, y) {
+  if (REDUCED_MOTION.matches) return;
   for (let i = 0; i < 18; i++) {
     const piece = document.createElement('div');
     piece.className = 'confetti-piece';
@@ -537,7 +585,13 @@ function downloadBlob(content, mime, filename) {
 $('export-btn').addEventListener('click', () => {
   if (!logs.length) { showToast('Nothing to export yet'); return; }
 
-  const csvCell = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  // Quote every cell; prefix =, +, -, @ so spreadsheet apps treat
+  // them as text rather than formulas when the file is opened.
+  const csvCell = (v) => {
+    let s = String(v);
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
   const rows = [['Date', 'Time', 'Medication', 'Dose']];
   for (const log of [...logs].sort((a, b) => b.ts - a.ts)) {
     const d = new Date(log.ts);
@@ -579,14 +633,22 @@ $('backup-import-input').addEventListener('change', (e) => {
       return;
     }
 
+    // Keep only well-formed entries so a hand-edited or truncated
+    // backup can't import broken rows.
+    const validMeds = data.meds
+      .filter((m) => m && m.id && m.name && m.dose)
+      .map(withSchedule);
+    const validLogs = data.logs
+      .filter((l) => l && l.id && l.name && typeof l.ts === 'number');
+
     // Restoring replaces everything — the one action worth a confirmation.
     const ok = confirm(
-      `Restore backup with ${data.meds.length} medication(s) and ${data.logs.length} log entries?\n\nThis replaces the data currently on this device.`
+      `Restore backup with ${validMeds.length} medication(s) and ${validLogs.length} log entries?\n\nThis replaces the data currently on this device.`
     );
     if (!ok) return;
 
-    meds = data.meds.map(withSchedule);
-    logs = data.logs;
+    meds = validMeds;
+    logs = validLogs;
     save(STORE.MEDS, meds);
     save(STORE.LOGS, logs);
     resetForm();
@@ -608,11 +670,9 @@ let selectedDays = [];
 $('med-suggestions').innerHTML =
   Object.keys(MED_DB).map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
 
-// When a known med is chosen (or typed), offer its typical doses as one-tap chips
+// When a known med is chosen (or typed), offer its typical strengths as one-tap chips
 function renderDoseChips() {
-  const name = $('med-name').value.trim();
-  const doses = MED_DB[name] ||
-    MED_DB[Object.keys(MED_DB).find((k) => k.toLowerCase() === name.toLowerCase())] || null;
+  const doses = findMedDoses($('med-name').value);
 
   const wrap = $('dose-chips');
   wrap.innerHTML = '';
@@ -645,7 +705,7 @@ function renderTimePicker() {
   for (const g of TIME_GROUPS) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.role = 'radio';
+    b.setAttribute('role', 'radio');
     b.setAttribute('aria-checked', String(selectedTime === g.key));
     b.className =
       'flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition-colors ' +
@@ -664,7 +724,7 @@ function renderSchedulePicker() {
   for (const s of SCHEDULE_TYPES) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.role = 'radio';
+    b.setAttribute('role', 'radio');
     b.setAttribute('aria-checked', String(selectedSchedule === s.key));
     b.className =
       'flex flex-col items-center gap-1 py-3 rounded-xl border-2 text-xs font-semibold transition-colors ' +
@@ -732,7 +792,7 @@ $('med-form').addEventListener('submit', (e) => {
 
   const schedule = {
     type: selectedSchedule,
-    days: selectedSchedule === 'weekly' ? [...selectedDays].sort() : [],
+    days: selectedSchedule === 'weekly' ? [...selectedDays].sort((a, b) => a - b) : [],
   };
 
   if (id) {
