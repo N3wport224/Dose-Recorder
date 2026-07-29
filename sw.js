@@ -1,10 +1,10 @@
 // Dose Recorder service worker — offline-first app shell.
 // Bump CACHE on breaking asset changes to evict old versions.
-const CACHE = 'dose-recorder-v1';
+const CACHE = 'dose-recorder-v2';
 const ASSETS = [
   './',
   './index.html',
-  './manifest.webmanifest',
+  './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',

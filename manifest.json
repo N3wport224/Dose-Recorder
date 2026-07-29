@@ -1,6 +1,6 @@
 {
   "name": "Dose Recorder",
-  "short_name": "Doses",
+  "short_name": "Dose",
   "description": "One-tap medication tracker",
   "start_url": "./",
   "scope": "./",
