@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Dose Recorder</title>
+  <meta name="description" content="One-tap medication tracker" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Dose" />
+  <style>
+    /* ============ Design tokens (auto light/dark) ============ */
+    :root {
+      --bg: #f1f5f9;
+      --bg-soft: #e2e8f0;
+      --card: #ffffff;
+      --card-translucent: rgba(255, 255, 255, 0.92);
+      --text: #1e293b;
+      --text-2: #64748b;
+      --text-3: #94a3b8;
+      --border: #e2e8f0;
+      --brand: #4f46e5;
+      --brand-strong: #4338ca;
+      --brand-weak: #eef2ff;
+      --success: #10b981;
+      --success-strong: #047857;
+      --success-weak: #ecfdf5;
+      --success-border: #a7f3d0;
+      --success-badge: #d1fae5;
+      --danger: #dc2626;
+      --danger-weak: #fee2e2;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --bg-soft: #293548;
+        --card: #1e293b;
+        --card-translucent: rgba(15, 23, 42, 0.92);
+        --text: #f1f5f9;
+        --text-2: #94a3b8;
+        --text-3: #64748b;
+        --border: #334155;
+        --brand: #6366f1;
+        --brand-strong: #a5b4fc;
+        --brand-weak: rgba(99, 102, 241, 0.18);
+        --success: #10b981;
+        --success-strong: #6ee7b7;
+        --success-weak: rgba(16, 185, 129, 0.12);
+        --success-border: rgba(16, 185, 129, 0.35);
+        --success-badge: rgba(16, 185, 129, 0.25);
+        --danger: #f87171;
+        --danger-weak: rgba(239, 68, 68, 0.18);
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    /* ============ Base ============ */
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overscroll-behavior-y: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+    ul { margin: 0; padding: 0; list-style: none; }
+    p { margin: 0; }
+    .hidden { display: none !important; }
+
+    .app {
+      max-width: 26rem;
+      margin: 0 auto;
+      padding: 0 1.25rem calc(5.75rem + env(safe-area-inset-bottom));
+    }
+
+    /* ============ Header ============ */
+    header { padding: 1.5rem 0 0.5rem; }
+    header h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+    .subtitle { color: var(--text-2); font-size: 0.875rem; margin-top: 2px; }
+
+    /* ============ Med buttons ============ */
+    .group-title {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-3); margin: 1.4rem 0 0.6rem;
+    }
+    .med-btn {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      gap: 0.75rem; text-align: left;
+      background: var(--card); border: 2px solid transparent; border-radius: 1.25rem;
+      padding: 1.05rem 1.25rem; box-shadow: var(--shadow);
+      transition: transform 0.08s ease; margin-bottom: 0.75rem;
+    }
+    .med-btn:active { transform: scale(0.97); }
+    .med-btn.taken { background: var(--success-weak); border-color: var(--success-border); }
+    .med-btn.dimmed { opacity: 0.6; }
+    .med-info { min-width: 0; }
+    .med-name {
+      display: block; font-size: 1.12rem; font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .med-sub { display: block; font-size: 0.9rem; color: var(--text-2); margin-top: 1px; }
+    .med-last { display: block; font-size: 0.78rem; color: var(--text-3); margin-top: 2px; }
+    .taken .med-name { color: var(--success-strong); }
+    .taken .med-last { color: var(--success-strong); }
+    .med-side { flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; }
+    .med-count {
+      font-size: 0.8rem; font-weight: 700; color: var(--success-strong);
+      background: var(--success-badge); border-radius: 999px; padding: 0.25rem 0.6rem;
+    }
+    .med-plus {
+      width: 2.9rem; height: 2.9rem; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.35rem; background: var(--brand-weak); color: var(--brand);
+    }
+    .taken .med-plus { background: var(--success); color: #fff; }
+
+    /* ============ Cards / forms ============ */
+    .card {
+      background: var(--card); border-radius: 1.25rem;
+      padding: 1.25rem; box-shadow: var(--shadow); margin-top: 1rem;
+    }
+    .card h3 { margin: 0 0 0.25rem; font-size: 1rem; }
+    .card .hint { font-size: 0.85rem; color: var(--text-2); margin-bottom: 1rem; }
+    .field { margin-bottom: 1rem; }
+    .label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.35rem; }
+    .label .soft { font-weight: 400; color: var(--text-3); }
+    .input {
+      width: 100%; font-size: 1.05rem; padding: 0.8rem 1rem;
+      border-radius: 0.9rem; border: 2px solid var(--border);
+      background: var(--card); color: var(--text); outline: none;
+    }
+    .input:focus { border-color: var(--brand); }
+    .input::placeholder { color: var(--text-3); }
+
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+    .grid7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.35rem; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+
+    .seg-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+      padding: 0.7rem 0.2rem; border-radius: 0.9rem;
+      border: 2px solid var(--border); background: transparent;
+      color: var(--text-2); font-size: 0.72rem; font-weight: 600;
+    }
+    .seg-btn.active { border-color: var(--brand); background: var(--brand-weak); color: var(--brand-strong); }
+    .seg-icon { font-size: 1.25rem; }
+
+    .day-btn {
+      padding: 0.6rem 0; border-radius: 0.7rem; border: 2px solid var(--border);
+      font-size: 0.72rem; font-weight: 700; background: transparent; color: var(--text-2);
+    }
+    .day-btn.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .chip {
+      padding: 0.5rem 0.9rem; border-radius: 999px; border: 2px solid var(--border);
+      font-size: 0.85rem; font-weight: 700; background: transparent; color: var(--text-2);
+    }
+    .chip.active { border-color: var(--brand); background: var(--brand-weak); color: var(--brand-strong); }
+
+    .btn-primary {
+      width: 100%; background: var(--brand); color: #fff; font-weight: 700;
+      font-size: 1.05rem; border: none; padding: 1rem; border-radius: 1rem;
+      transition: transform 0.08s ease;
+    }
+    .btn-primary:active { transform: scale(0.97); }
+    .btn-soft {
+      background: var(--brand-weak); color: var(--brand-strong); font-weight: 600;
+      border: none; border-radius: 0.8rem; padding: 0.6rem 1rem; font-size: 0.9rem;
+      transition: transform 0.08s ease;
+    }
+    .btn-soft:active { transform: scale(0.95); }
+    .btn-block {
+      display: block; width: 100%; text-align: center; padding: 0.9rem;
+      border-radius: 0.9rem; border: none; font-weight: 600; font-size: 0.95rem;
+      transition: transform 0.08s ease;
+    }
+    .btn-block:active { transform: scale(0.97); }
+    .btn-block.indigo { background: var(--brand-weak); color: var(--brand-strong); }
+    .btn-block.plain { background: var(--bg-soft); color: var(--text); cursor: pointer; }
+    .btn-ghost { background: none; border: none; color: var(--text-2); font-weight: 600; width: 100%; padding: 0.6rem; }
+    .warning-text { font-size: 0.85rem; font-weight: 600; color: var(--danger); margin-top: 0.5rem; }
+
+    .icon-btn {
+      width: 2.75rem; height: 2.75rem; border-radius: 0.9rem; border: none;
+      display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
+      background: var(--bg-soft); flex-shrink: 0;
+      transition: transform 0.08s ease;
+    }
+    .icon-btn:active { transform: scale(0.92); }
+    .icon-btn.danger { background: var(--danger-weak); }
+
+    /* ============ Lists (history + med list) ============ */
+    .row {
+      background: var(--card); border-radius: 1rem; padding: 0.75rem 1rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+      box-shadow: var(--shadow); margin-bottom: 0.5rem;
+    }
+    .row-main { min-width: 0; }
+    .row-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row-title .soft { font-weight: 400; color: var(--text-2); }
+    .row-sub { font-size: 0.85rem; color: var(--text-3); margin-top: 1px; }
+    .row-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin: 1.25rem 0 0.75rem; }
+    .section-head h2 { margin: 0; font-size: 1.1rem; }
+    .muted-note { color: var(--text-3); font-size: 0.875rem; padding: 0.5rem 0; }
+
+    details summary { cursor: pointer; user-select: none; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    .details-title { font-size: 1.05rem; font-weight: 700; margin: 1.25rem 0 0.5rem; }
+    .details-title .soft { font-weight: 400; font-size: 0.85rem; color: var(--text-3); }
+    .offday-summary {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-3); margin: 1.25rem 0 0.6rem;
+    }
+
+    /* ============ Empty state ============ */
+    .empty { text-align: center; margin-top: 3.5rem; padding: 0 1rem; }
+    .empty-emoji { font-size: 3.5rem; margin-bottom: 0.75rem; }
+    .empty h2 { margin: 0 0 0.5rem; font-size: 1.2rem; }
+    .empty p { color: var(--text-2); margin-bottom: 1.25rem; }
+    .empty .btn-primary { width: auto; padding: 1rem 2rem; }
+
+    /* ============ Bottom tab bar ============ */
+    .tabbar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+      background: var(--card-translucent);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      padding: 0.35rem 0 calc(0.35rem + env(safe-area-inset-bottom));
+      display: flex; justify-content: center;
+    }
+    .tabbar-inner { display: flex; width: 100%; max-width: 26rem; }
+    .tab {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: none; border: none; color: var(--text-3);
+      font-size: 0.68rem; font-weight: 600; padding: 0.3rem 0;
+    }
+    .tab.active { color: var(--brand-strong); }
+    .tab-icon { font-size: 1.35rem; line-height: 1.2; }
+
+    /* ============ Toast ============ */
+    .toast {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: calc(4.6rem + env(safe-area-inset-bottom)); z-index: 50;
+    }
+    .toast-inner {
+      background: #0f172a; color: #fff; border-radius: 1rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      padding: 0.75rem 1.25rem; display: flex; align-items: center; gap: 1rem;
+      font-weight: 500; max-width: 90vw;
+    }
+    @media (prefers-color-scheme: dark) {
+      .toast-inner { background: #f1f5f9; color: #0f172a; }
+    }
+    .toast-undo { background: none; border: none; color: var(--success); font-weight: 800; font-size: 1.05rem; padding: 0.2rem 0.4rem; }
+
+    /* ============ Animations ============ */
+    @keyframes pulse-ring {
+      0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
+      100% { box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
+    }
+    .just-logged { animation: pulse-ring 0.6s ease-out; }
+    @keyframes pop-in {
+      0% { transform: scale(0); } 70% { transform: scale(1.25); } 100% { transform: scale(1); }
+    }
+    .check-pop { animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    @keyframes slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+    .row.fresh { animation: slide-in 0.2s ease-out; }
+    .confetti-piece {
+      position: fixed; width: 9px; height: 9px; border-radius: 2px;
+      pointer-events: none; z-index: 100; will-change: transform, opacity;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .just-logged, .check-pop, .row.fresh { animation: none; }
+      .med-btn:active, .btn-primary:active { transform: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app">
+    <header>
+      <h1>Dose Recorder</h1>
+      <p id="header-date" class="subtitle"></p>
+    </header>
+
+    <!-- ============ HOME (dashboard) ============ -->
+    <main id="view-home">
+      <div id="med-buttons"></div>
+
+      <details id="offday-details" class="hidden">
+        <summary class="offday-summary">🗓 Not scheduled today <span id="offday-count"></span></summary>
+        <div id="offday-buttons"></div>
+      </details>
+
+      <div id="empty-state" class="empty hidden">
+        <div class="empty-emoji">💊</div>
+        <h2>No medications yet</h2>
+        <p>Add your medications once, then logging a dose is a single tap.</p>
+        <button id="empty-add-btn" class="btn-primary">Add a medication</button>
+      </div>
+    </main>
+
+    <!-- ============ HISTORY ============ -->
+    <main id="view-history" class="hidden">
+      <div class="section-head">
+        <h2>Today</h2>
+        <button id="export-btn" class="btn-soft">Export CSV</button>
+      </div>
+      <ul id="today-logs"></ul>
+      <p id="today-empty" class="muted-note">Nothing logged yet today.</p>
+
+      <details id="past-logs-details" class="hidden">
+        <summary class="details-title">Past days <span id="past-count" class="soft"></span></summary>
+        <ul id="past-logs"></ul>
+      </details>
+    </main>
+
+    <!-- ============ SETTINGS ============ -->
+    <main id="view-settings" class="hidden">
+      <form id="med-form" class="card">
+        <h3 id="form-title">Add a medication</h3>
+        <p class="hint">Pick from the list or type anything.</p>
+        <input type="hidden" id="med-id" />
+
+        <div class="field">
+          <label class="label" for="med-name">Medication name</label>
+          <input id="med-name" class="input" type="text" required list="med-suggestions"
+            placeholder="Type or pick from list…" autocomplete="off" />
+          <datalist id="med-suggestions"></datalist>
+        </div>
+
+        <div class="field">
+          <label class="label" for="med-dose">Dosage</label>
+          <div id="dose-chips" class="chips hidden"></div>
+          <input id="med-dose" class="input" type="text" required
+            placeholder="e.g. 20mg (or tap a dose above)" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <span class="label">Schedule</span>
+          <div id="schedule-picker" class="grid3" role="radiogroup" aria-label="Schedule"></div>
+          <div id="day-picker-wrap" class="hidden" style="margin-top:0.75rem">
+            <span class="label">On which days?</span>
+            <div id="day-picker" class="grid7" role="group" aria-label="Days of the week"></div>
+            <p id="day-warning" class="warning-text hidden">Pick at least one day.</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="label">Time of day <span class="soft">(for grouping)</span></span>
+          <div id="time-picker" class="grid4" role="radiogroup" aria-label="Time of day"></div>
+        </div>
+
+        <button type="submit" id="med-save-btn" class="btn-primary">Add medication</button>
+        <button type="button" id="med-cancel-btn" class="btn-ghost hidden">Cancel editing</button>
+      </form>
+
+      <ul id="med-list" style="margin-top:1rem"></ul>
+
+      <section class="card">
+        <h3>Backup &amp; restore</h3>
+        <p class="hint">Saves your medications <em>and</em> full history as one JSON file — use it to move devices or recover data.</p>
+        <div class="grid2">
+          <button id="backup-export-btn" class="btn-block indigo">⬇️ Export backup</button>
+          <label for="backup-import-input" class="btn-block plain">⬆️ Import backup</label>
+          <input id="backup-import-input" type="file" accept=".json,application/json" class="hidden" />
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Install on your phone</h3>
+        <p class="hint" style="margin-bottom:0">
+          Open this app's link on your phone, then:<br />
+          <strong>iPhone:</strong> Share button → <em>Add to Home Screen</em>.<br />
+          <strong>Android:</strong> browser menu → <em>Install app</em>.<br />
+          It launches full-screen from its own icon and works offline.
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============ Tab bar ============ -->
+  <nav class="tabbar" aria-label="Main">
+    <div class="tabbar-inner">
+      <button class="tab" data-view="home"><span class="tab-icon">💊</span>Meds</button>
+      <button class="tab" data-view="history"><span class="tab-icon">🕐</span>History</button>
+      <button class="tab" data-view="settings"><span class="tab-icon">⚙️</span>Settings</button>
+    </div>
+  </nav>
+
+  <!-- ============ Toast ============ -->
+  <div id="toast" role="status" aria-live="polite" class="toast hidden">
+    <div class="toast-inner">
+      <span id="toast-text"></span>
+      <button id="toast-undo" class="toast-undo">Undo</button>
+    </div>
+  </div>
+
+<script>
+'use strict';
+
+/* ================================================================
+   Medication quick-select database — ADHD meds plus other common
+   daily prescriptions and supplements, with commonly available
+   strengths. Pre-fills the name datalist and the one-tap dose chips.
+   Convenience data only — NOT dosing guidance; the prescription
+   label always wins. Free-text entry works for anything not listed.
+   ================================================================ */
+const MED_DB = {
+  // --- ADHD: methylphenidate class ---
+  'Methylphenidate IR':                  ['5mg', '10mg', '20mg'],
+  'Methylphenidate ER':                  ['18mg', '27mg', '36mg', '54mg'],
+  'Concerta (methylphenidate ER)':       ['18mg', '27mg', '36mg', '54mg'],
+  'Ritalin (methylphenidate)':           ['5mg', '10mg', '20mg'],
+  'Ritalin LA':                          ['10mg', '20mg', '30mg', '40mg', '60mg'],
+  'Metadate CD':                         ['10mg', '20mg', '30mg', '40mg', '50mg', '60mg'],
+  'Aptensio XR':                         ['10mg', '15mg', '20mg', '30mg', '40mg', '50mg', '60mg'],
+  'Quillivant XR (liquid)':              ['20mg', '30mg', '40mg', '60mg'],
+  'QuilliChew ER':                       ['20mg', '30mg', '40mg'],
+  'Daytrana (patch)':                    ['10mg', '15mg', '20mg', '30mg'],
+  'Jornay PM':                           ['20mg', '40mg', '60mg', '80mg', '100mg'],
+  'Cotempla XR-ODT':                     ['8.6mg', '17.3mg', '25.9mg'],
+  'Azstarys (serdexmethylphenidate)':    ['26.1/5.2mg', '39.2/7.8mg', '52.3/10.4mg'],
+  'Focalin (dexmethylphenidate)':        ['2.5mg', '5mg', '10mg'],
+  'Focalin XR':                          ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg', '35mg', '40mg'],
+  // --- ADHD: amphetamine class ---
+  'Adderall (amphetamine salts)':        ['5mg', '7.5mg', '10mg', '12.5mg', '15mg', '20mg', '30mg'],
+  'Adderall XR':                         ['5mg', '10mg', '15mg', '20mg', '25mg', '30mg'],
+  'Mydayis':                             ['12.5mg', '25mg', '37.5mg', '50mg'],
+  'Vyvanse (lisdexamfetamine)':          ['10mg', '20mg', '30mg', '40mg', '50mg', '60mg', '70mg'],
+  'Dexedrine (dextroamphetamine)':       ['5mg', '10mg'],
+  'Dexedrine Spansule':                  ['5mg', '10mg', '15mg'],
+  'Zenzedi':                             ['2.5mg', '5mg', '7.5mg', '10mg', '15mg', '20mg', '30mg'],
+  'Evekeo (amphetamine sulfate)':        ['5mg', '10mg'],
+  'Adzenys XR-ODT':                      ['3.1mg', '6.3mg', '9.4mg', '12.5mg', '15.7mg', '18.8mg'],
+  'Dyanavel XR (liquid)':                ['2.5mg/mL'],
+  'Xelstrym (dextroamphetamine patch)':  ['4.5mg', '9mg', '13.5mg', '18mg'],
+  // --- ADHD: non-stimulants ---
+  'Strattera (atomoxetine)':             ['10mg', '18mg', '25mg', '40mg', '60mg', '80mg', '100mg'],
+  'Qelbree (viloxazine)':                ['100mg', '150mg', '200mg'],
+  'Intuniv (guanfacine ER)':             ['1mg', '2mg', '3mg', '4mg'],
+  'Guanfacine IR':                       ['1mg', '2mg'],
+  'Kapvay (clonidine ER)':               ['0.1mg', '0.2mg'],
+  'Clonidine IR':                        ['0.1mg', '0.2mg', '0.3mg'],
+  'Modafinil (Provigil)':                ['100mg', '200mg'],
+  // --- Antidepressants / mood ---
+  'Sertraline (Zoloft)':                 ['25mg', '50mg', '100mg'],
+  'Fluoxetine (Prozac)':                 ['10mg', '20mg', '40mg'],
+  'Escitalopram (Lexapro)':              ['5mg', '10mg', '20mg'],
+  'Citalopram (Celexa)':                 ['10mg', '20mg', '40mg'],
+  'Paroxetine (Paxil)':                  ['10mg', '20mg', '30mg', '40mg'],
+  'Venlafaxine XR (Effexor XR)':         ['37.5mg', '75mg', '150mg'],
+  'Duloxetine (Cymbalta)':               ['20mg', '30mg', '60mg'],
+  'Bupropion SR (Wellbutrin SR)':        ['100mg', '150mg', '200mg'],
+  'Bupropion XL (Wellbutrin XL)':        ['150mg', '300mg'],
+  'Mirtazapine (Remeron)':               ['7.5mg', '15mg', '30mg', '45mg'],
+  'Trazodone':                           ['50mg', '100mg', '150mg'],
+  'Lamotrigine (Lamictal)':              ['25mg', '50mg', '100mg', '150mg', '200mg'],
+  'Lithium carbonate':                   ['300mg', '450mg', '600mg'],
+  'Quetiapine (Seroquel)':               ['25mg', '50mg', '100mg', '200mg', '300mg'],
+  'Aripiprazole (Abilify)':              ['2mg', '5mg', '10mg', '15mg', '20mg', '30mg'],
+  // --- Anxiety / nerve ---
+  'Buspirone (Buspar)':                  ['5mg', '7.5mg', '10mg', '15mg', '30mg'],
+  'Hydroxyzine (Vistaril)':              ['10mg', '25mg', '50mg'],
+  'Alprazolam (Xanax)':                  ['0.25mg', '0.5mg', '1mg', '2mg'],
+  'Clonazepam (Klonopin)':               ['0.5mg', '1mg', '2mg'],
+  'Lorazepam (Ativan)':                  ['0.5mg', '1mg', '2mg'],
+  'Diazepam (Valium)':                   ['2mg', '5mg', '10mg'],
+  'Gabapentin (Neurontin)':              ['100mg', '300mg', '400mg', '600mg', '800mg'],
+  'Pregabalin (Lyrica)':                 ['25mg', '50mg', '75mg', '100mg', '150mg'],
+  'Naltrexone':                          ['4.5mg', '25mg', '50mg'],
+  // --- Sleep ---
+  'Melatonin':                           ['1mg', '3mg', '5mg', '10mg'],
+  'Zolpidem (Ambien)':                   ['5mg', '10mg'],
+  'Doxylamine (Unisom)':                 ['25mg'],
+  // --- Muscle relaxants ---
+  'Methocarbamol (Robaxin)':             ['500mg', '750mg'],
+  'Cyclobenzaprine (Flexeril)':          ['5mg', '10mg'],
+  'Tizanidine (Zanaflex)':               ['2mg', '4mg'],
+  'Baclofen':                            ['5mg', '10mg', '20mg'],
+  // --- Pain / inflammation ---
+  'Ibuprofen (Advil)':                   ['200mg', '400mg', '600mg', '800mg'],
+  'Naproxen (Aleve)':                    ['220mg', '250mg', '375mg', '500mg'],
+  'Acetaminophen (Tylenol)':             ['325mg', '500mg', '650mg'],
+  'Aspirin':                             ['81mg', '325mg'],
+  'Meloxicam (Mobic)':                   ['7.5mg', '15mg'],
+  'Tramadol':                            ['50mg'],
+  'Sumatriptan (Imitrex)':               ['25mg', '50mg', '100mg'],
+  'Prednisone':                          ['5mg', '10mg', '20mg'],
+  // --- Hormones / thyroid ---
+  'Testosterone cypionate (injection)':  ['50mg', '100mg', '200mg'],
+  'Testosterone enanthate (injection)':  ['100mg', '200mg'],
+  'Testosterone gel (AndroGel)':         ['20.25mg', '40.5mg', '60.75mg', '81mg'],
+  'Levothyroxine (Synthroid)':           ['25mcg', '50mcg', '75mcg', '88mcg', '100mcg', '112mcg', '125mcg', '150mcg'],
+  'Estradiol':                           ['0.5mg', '1mg', '2mg'],
+  'Progesterone (Prometrium)':           ['100mg', '200mg'],
+  'Finasteride (Propecia)':              ['1mg', '5mg'],
+  'Spironolactone':                      ['25mg', '50mg', '100mg'],
+  'Birth control pill':                  ['1 tablet'],
+  // --- Heart / blood pressure ---
+  'Lisinopril':                          ['5mg', '10mg', '20mg', '40mg'],
+  'Losartan (Cozaar)':                   ['25mg', '50mg', '100mg'],
+  'Amlodipine (Norvasc)':                ['2.5mg', '5mg', '10mg'],
+  'Metoprolol':                          ['25mg', '50mg', '100mg'],
+  'Propranolol':                         ['10mg', '20mg', '40mg', '80mg'],
+  'Atenolol':                            ['25mg', '50mg', '100mg'],
+  'Hydrochlorothiazide':                 ['12.5mg', '25mg'],
+  // --- Cholesterol / blood sugar ---
+  'Atorvastatin (Lipitor)':              ['10mg', '20mg', '40mg', '80mg'],
+  'Rosuvastatin (Crestor)':              ['5mg', '10mg', '20mg', '40mg'],
+  'Simvastatin (Zocor)':                 ['10mg', '20mg', '40mg'],
+  'Metformin':                           ['500mg', '850mg', '1000mg'],
+  'Metformin ER':                        ['500mg', '750mg', '1000mg'],
+  'Semaglutide (Ozempic, weekly)':       ['0.25mg', '0.5mg', '1mg', '2mg'],
+  // --- Stomach ---
+  'Omeprazole (Prilosec)':               ['20mg', '40mg'],
+  'Pantoprazole (Protonix)':             ['20mg', '40mg'],
+  'Famotidine (Pepcid)':                 ['10mg', '20mg', '40mg'],
+  'Ondansetron (Zofran)':                ['4mg', '8mg'],
+  // --- Allergy / asthma ---
+  'Cetirizine (Zyrtec)':                 ['5mg', '10mg'],
+  'Loratadine (Claritin)':               ['10mg'],
+  'Fexofenadine (Allegra)':              ['60mg', '120mg', '180mg'],
+  'Montelukast (Singulair)':             ['4mg', '5mg', '10mg'],
+  'Diphenhydramine (Benadryl)':          ['25mg', '50mg'],
+  // --- Vitamins & supplements ---
+  'Vitamin D3':                          ['1000IU', '2000IU', '5000IU'],
+  'Vitamin B12':                         ['500mcg', '1000mcg'],
+  'Vitamin C':                           ['500mg', '1000mg'],
+  'Magnesium':                           ['200mg', '250mg', '400mg'],
+  'Zinc':                                ['25mg', '50mg'],
+  'Iron (ferrous sulfate)':              ['325mg'],
+  'Omega-3 fish oil':                    ['1000mg'],
+  'Multivitamin':                        ['1 tablet'],
+  'Probiotic':                           ['1 capsule'],
+  'Creatine':                            ['5g'],
+  'Caffeine':                            ['100mg', '200mg'],
+  'L-Theanine':                          ['100mg', '200mg'],
+};
+
+// Match a typed name to a MED_DB entry: exact match first, then the
+// brand name alone ("Concerta" → "Concerta (methylphenidate ER)").
+function findMedDoses(name) {
+  const n = name.trim().toLowerCase();
+  if (!n) return null;
+  for (const key of Object.keys(MED_DB)) {
+    if (key.toLowerCase() === n || key.split(' (')[0].toLowerCase() === n) {
+      return MED_DB[key];
+    }
+  }
+  return null;
+}
+
+/* ================================================================
+   Data layer — everything lives in LocalStorage
+   ================================================================ */
+const STORE = {
+  MEDS: 'doseRecorder.meds',
+  LOGS: 'doseRecorder.logs',
+};
+
+const load = (key) => {
+  try { return JSON.parse(localStorage.getItem(key)) || []; }
+  catch { return []; }
+};
+
+// Surface storage failures (private browsing, quota) instead of
+// letting a "logged" dose silently vanish on the next refresh.
+const save = (key, value) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch { showToast('⚠️ Couldn’t save — storage is full or blocked'); }
+};
+
+// Meds saved by older versions have no schedule — treat them as daily.
+const withSchedule = (m) => ({ ...m, schedule: m.schedule || { type: 'daily', days: [] } });
+
+let meds = load(STORE.MEDS).map(withSchedule); // [{id, name, dose, timeOfDay, schedule:{type,days}}]
+let logs = load(STORE.LOGS);                   // [{id, medId, name, dose, ts}]  ts = epoch ms
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ================================================================
+   Schedule + time-of-day definitions
+   ================================================================ */
+const TIME_GROUPS = [
+  { key: 'morning',   label: 'Morning',   icon: '☀️' },
+  { key: 'afternoon', label: 'Afternoon', icon: '🌤️' },
+  { key: 'evening',   label: 'Evening',   icon: '🌙' },
+  { key: 'anytime',   label: 'Anytime',   icon: '💊' },
+];
+
+const SCHEDULE_TYPES = [
+  { key: 'daily',  label: 'Daily',     icon: '📅' },
+  { key: 'weekly', label: 'Weekly',    icon: '🗓' },
+  { key: 'prn',    label: 'As needed', icon: '✋' },
+];
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Is this med due on the dashboard today? Daily and PRN always are;
+// weekly meds only on their picked days.
+const isScheduledToday = (med) => {
+  const s = med.schedule || { type: 'daily' };
+  if (s.type !== 'weekly') return true;
+  return (s.days || []).includes(new Date().getDay());
+};
+
+const scheduleSummary = (med) => {
+  const s = med.schedule || { type: 'daily' };
+  if (s.type === 'prn') return '✋ As needed';
+  if (s.type === 'weekly') {
+    const days = (s.days || []).slice().sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join(', ');
+    return `🗓 Weekly · ${days || 'no days set'}`;
+  }
+  return '📅 Daily';
+};
+
+/* ================================================================
+   Helpers
+   ================================================================ */
+const dayKey = (ts) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const todayKey = () => dayKey(Date.now());
+
+const fmtTime = (ts) =>
+  new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+const fmtDate = (ts) =>
+  new Date(ts).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+const escapeHtml = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const timesLoggedToday = (medId) =>
+  logs.filter((l) => l.medId === medId && dayKey(l.ts) === todayKey()).length;
+
+// "Last taken 2h 15m ago" — the anti-"did I already take it?" line
+function lastTakenText(medId) {
+  let last = 0;
+  for (const l of logs) if (l.medId === medId && l.ts > last) last = l.ts;
+  if (!last) return '';
+  const mins = Math.floor((Date.now() - last) / 60000);
+  if (mins < 1) return 'Last taken just now';
+  if (mins < 60) return `Last taken ${mins}m ago`;
+  if (dayKey(last) === todayKey()) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `Last taken ${h}h${m ? ' ' + m + 'm' : ''} ago`;
+  }
+  if (dayKey(last) === dayKey(Date.now() - 86400000)) return `Last taken yesterday, ${fmtTime(last)}`;
+  return `Last taken ${new Date(last).toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+}
+
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+/* ================================================================
+   View switching (bottom tab bar)
+   ================================================================ */
+const $ = (id) => document.getElementById(id);
+
+function showView(view) {
+  for (const v of ['home', 'history', 'settings']) {
+    $('view-' + v).classList.toggle('hidden', v !== view);
+  }
+  for (const tab of document.querySelectorAll('.tab')) {
+    const active = tab.dataset.view === view;
+    tab.classList.toggle('active', active);
+    if (active) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  }
+  if (view === 'home') renderHome();
+  if (view === 'history') renderHistory();
+  if (view === 'settings') renderMedList();
+  window.scrollTo(0, 0);
+}
+
+for (const tab of document.querySelectorAll('.tab')) {
+  tab.addEventListener('click', () => showView(tab.dataset.view));
+}
+$('empty-add-btn').addEventListener('click', () => showView('settings'));
+
+/* ================================================================
+   Home — one tap = one logged dose
+   ================================================================ */
+function medButton(med, { dimmed = false } = {}) {
+  const count = timesLoggedToday(med.id);
+  const taken = count > 0;
+  const isPrn = (med.schedule || {}).type === 'prn';
+  const lastText = lastTakenText(med.id);
+
+  const btn = document.createElement('button');
+  btn.dataset.medId = med.id;
+  btn.className = 'med-btn' + (taken ? ' taken' : '') + (dimmed ? ' dimmed' : '');
+  btn.setAttribute('aria-label',
+    `Log ${med.name} ${med.dose}` + (taken ? `, already taken ${count} time${count > 1 ? 's' : ''} today` : ''));
+  btn.innerHTML = `
+    <span class="med-info">
+      <span class="med-name">${escapeHtml(med.name)}</span>
+      <span class="med-sub">${escapeHtml(med.dose)}${isPrn ? ' · as needed' : ''}</span>
+      ${lastText ? `<span class="med-last">${lastText}</span>` : ''}
+    </span>
+    <span class="med-side">
+      ${count > 1 ? `<span class="med-count">×${count}</span>` : ''}
+      <span class="med-plus ${taken ? 'check-pop' : ''}">${taken ? '✓' : '+'}</span>
+    </span>`;
+  btn.addEventListener('click', (e) => logDose(med, e));
+  return btn;
+}
+
+function renderHome() {
+  $('header-date').textContent = fmtDate(Date.now());
+
+  const container = $('med-buttons');
+  container.innerHTML = '';
+  $('empty-state').classList.toggle('hidden', meds.length > 0);
+
+  const dueToday = meds.filter(isScheduledToday);
+  const offDay = meds.filter((m) => !isScheduledToday(m));
+
+  for (const group of TIME_GROUPS) {
+    const groupMeds = dueToday.filter((m) => (m.timeOfDay || 'anytime') === group.key);
+    if (!groupMeds.length) continue;
+
+    const title = document.createElement('h2');
+    title.className = 'group-title';
+    title.textContent = `${group.icon} ${group.label}`;
+    container.appendChild(title);
+
+    for (const med of groupMeds) container.appendChild(medButton(med));
+  }
+
+  // Weekly meds whose day isn't today: hidden behind a collapsed toggle,
+  // still tappable in case of an off-schedule dose.
+  $('offday-details').classList.toggle('hidden', offDay.length === 0);
+  $('offday-count').textContent = offDay.length ? `(${offDay.length})` : '';
+  const offList = $('offday-buttons');
+  offList.innerHTML = '';
+  for (const med of offDay) offList.appendChild(medButton(med, { dimmed: true }));
+}
+
+let undoTimer = null;
+let lastLogId = null;
+
+function logDose(med, event) {
+  // The one and only step: record it. No dialogs, no confirmation.
+  const entry = { id: uid(), medId: med.id, name: med.name, dose: med.dose, ts: Date.now() };
+  logs.push(entry);
+  save(STORE.LOGS, logs);
+  lastLogId = entry.id;
+
+  if (navigator.vibrate) navigator.vibrate(30);
+  confettiBurst(event.clientX || innerWidth / 2, event.clientY || innerHeight / 2);
+
+  renderHome();
+  showToast(`${med.name} logged · ${fmtTime(entry.ts)}`, { undoable: true });
+  pulseButtonFor(med.id);
+}
+
+// Re-find the freshly rendered button and play the success ring on it
+function pulseButtonFor(medId) {
+  const btn = document.querySelector(`#view-home [data-med-id="${medId}"]`);
+  if (!btn) return;
+  btn.classList.add('just-logged');
+  setTimeout(() => btn.classList.remove('just-logged'), 700);
+}
+
+function showToast(text, { undoable = false } = {}) {
+  $('toast-text').textContent = text;
+  $('toast-undo').classList.toggle('hidden', !undoable);
+  $('toast').classList.remove('hidden');
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => $('toast').classList.add('hidden'), 5000);
+}
+
+$('toast-undo').addEventListener('click', () => {
+  if (lastLogId) {
+    logs = logs.filter((l) => l.id !== lastLogId);
+    save(STORE.LOGS, logs);
+    lastLogId = null;
+  }
+  $('toast').classList.add('hidden');
+  renderHome();
+});
+
+/* ================================================================
+   Confetti — tiny, dependency-free burst from the tap point
+   ================================================================ */
+const CONFETTI_COLORS = ['#34d399', '#6366f1', '#fbbf24', '#f472b6', '#38bdf8'];
+
+function confettiBurst(x, y) {
+  if (REDUCED_MOTION.matches) return;
+  for (let i = 0; i < 18; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    piece.style.left = x + 'px';
+    piece.style.top = y + 'px';
+    document.body.appendChild(piece);
+
+    const angle = Math.random() * Math.PI * 2;
+    const velocity = 60 + Math.random() * 110;
+    const dx = Math.cos(angle) * velocity;
+    const dy = Math.sin(angle) * velocity - 70; // bias upward
+    const rotation = (Math.random() - 0.5) * 540;
+
+    piece.animate(
+      [
+        { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+        { transform: `translate(${dx}px, ${dy + 130}px) rotate(${rotation}deg)`, opacity: 0 },
+      ],
+      { duration: 750 + Math.random() * 350, easing: 'cubic-bezier(0.15, 0.6, 0.4, 1)' }
+    ).onfinish = () => piece.remove();
+  }
+}
+
+/* ================================================================
+   History tab
+   ================================================================ */
+function renderHistory() {
+  const today = [];
+  const past = [];
+  for (const log of [...logs].sort((a, b) => b.ts - a.ts)) {
+    (dayKey(log.ts) === todayKey() ? today : past).push(log);
+  }
+
+  $('today-empty').classList.toggle('hidden', today.length > 0);
+  $('today-logs').innerHTML = today.map((l) => logRowHtml(l)).join('');
+
+  $('past-logs-details').classList.toggle('hidden', past.length === 0);
+  $('past-count').textContent = past.length ? `(${past.length} entries — tap to show)` : '';
+
+  // Past logs get a date label per entry
+  $('past-logs').innerHTML = past.map((l) => logRowHtml(l, true)).join('');
+
+  for (const el of document.querySelectorAll('[data-delete-log]')) {
+    el.addEventListener('click', () => deleteLog(el.dataset.deleteLog));
+  }
+}
+
+function logRowHtml(log, withDate = false) {
+  return `
+    <li class="row fresh">
+      <div class="row-main">
+        <p class="row-title">${escapeHtml(log.name)} <span class="soft">${escapeHtml(log.dose)}</span></p>
+        <p class="row-sub">${withDate ? fmtDate(log.ts) + ' · ' : ''}${fmtTime(log.ts)}</p>
+      </div>
+      <button data-delete-log="${log.id}" aria-label="Delete this entry" class="icon-btn">🗑</button>
+    </li>`;
+}
+
+function deleteLog(id) {
+  logs = logs.filter((l) => l.id !== id);
+  save(STORE.LOGS, logs);
+  renderHistory();
+}
+
+/* ================================================================
+   CSV export — shareable with a doctor
+   ================================================================ */
+function downloadBlob(content, mime, filename) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+$('export-btn').addEventListener('click', () => {
+  if (!logs.length) { showToast('Nothing to export yet'); return; }
+
+  // Quote every cell; prefix =, +, -, @ so spreadsheet apps treat
+  // them as text rather than formulas when the file is opened.
+  const csvCell = (v) => {
+    let s = String(v);
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+  const rows = [['Date', 'Time', 'Medication', 'Dose']];
+  for (const log of [...logs].sort((a, b) => b.ts - a.ts)) {
+    const d = new Date(log.ts);
+    rows.push([d.toLocaleDateString(), d.toLocaleTimeString(), log.name, log.dose]);
+  }
+  const csv = rows.map((r) => r.map(csvCell).join(',')).join('\r\n');
+  downloadBlob(csv, 'text/csv;charset=utf-8', `medication-log-${todayKey()}.csv`);
+});
+
+/* ================================================================
+   Full backup — meds + logs in one JSON file, and restore from it
+   ================================================================ */
+$('backup-export-btn').addEventListener('click', () => {
+  const backup = {
+    app: 'dose-recorder',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    meds,
+    logs,
+  };
+  downloadBlob(JSON.stringify(backup, null, 2), 'application/json', `dose-recorder-backup-${todayKey()}.json`);
+  showToast('Backup downloaded');
+});
+
+$('backup-import-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = ''; // allow re-picking the same file later
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onerror = () => showToast('Could not read that file');
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch { showToast('That file isn’t valid JSON'); return; }
+
+    if (!data || !Array.isArray(data.meds) || !Array.isArray(data.logs)) {
+      showToast('Not a Dose Recorder backup file');
+      return;
+    }
+
+    // Keep only well-formed entries so a hand-edited or truncated
+    // backup can't import broken rows.
+    const validMeds = data.meds
+      .filter((m) => m && m.id && m.name && m.dose)
+      .map(withSchedule);
+    const validLogs = data.logs
+      .filter((l) => l && l.id && l.name && typeof l.ts === 'number');
+
+    // Restoring replaces everything — the one action worth a confirmation.
+    const ok = confirm(
+      `Restore backup with ${validMeds.length} medication(s) and ${validLogs.length} log entries?\n\nThis replaces the data currently on this device.`
+    );
+    if (!ok) return;
+
+    meds = validMeds;
+    logs = validLogs;
+    save(STORE.MEDS, meds);
+    save(STORE.LOGS, logs);
+    resetForm();
+    renderMedList();
+    showToast('Backup restored ✓');
+  };
+  reader.readAsText(file);
+});
+
+/* ================================================================
+   Settings — add / edit / delete medications
+   ================================================================ */
+let selectedTime = 'anytime';
+let selectedSchedule = 'daily';
+let selectedDays = [];
+
+// Fill the searchable name suggestions once
+$('med-suggestions').innerHTML =
+  Object.keys(MED_DB).map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
+
+// When a known med is chosen (or typed), offer its typical strengths as one-tap chips
+function renderDoseChips() {
+  const doses = findMedDoses($('med-name').value);
+
+  const wrap = $('dose-chips');
+  wrap.innerHTML = '';
+  wrap.classList.toggle('hidden', !doses);
+  if (!doses) return;
+
+  for (const dose of doses) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip' + ($('med-dose').value.trim() === dose ? ' active' : '');
+    chip.textContent = dose;
+    chip.addEventListener('click', () => {
+      $('med-dose').value = dose;
+      renderDoseChips();
+    });
+    wrap.appendChild(chip);
+  }
+}
+
+$('med-name').addEventListener('input', renderDoseChips);
+$('med-dose').addEventListener('input', renderDoseChips);
+
+function renderTimePicker() {
+  const picker = $('time-picker');
+  picker.innerHTML = '';
+  for (const g of TIME_GROUPS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(selectedTime === g.key));
+    b.className = 'seg-btn' + (selectedTime === g.key ? ' active' : '');
+    b.innerHTML = `<span class="seg-icon">${g.icon}</span>${g.label}`;
+    b.addEventListener('click', () => { selectedTime = g.key; renderTimePicker(); });
+    picker.appendChild(b);
+  }
+}
+
+function renderSchedulePicker() {
+  const picker = $('schedule-picker');
+  picker.innerHTML = '';
+  for (const s of SCHEDULE_TYPES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(selectedSchedule === s.key));
+    b.className = 'seg-btn' + (selectedSchedule === s.key ? ' active' : '');
+    b.innerHTML = `<span class="seg-icon">${s.icon}</span>${s.label}`;
+    b.addEventListener('click', () => {
+      selectedSchedule = s.key;
+      renderSchedulePicker();
+    });
+    picker.appendChild(b);
+  }
+  $('day-picker-wrap').classList.toggle('hidden', selectedSchedule !== 'weekly');
+  if (selectedSchedule === 'weekly') renderDayPicker();
+  else $('day-warning').classList.add('hidden');
+}
+
+function renderDayPicker() {
+  const picker = $('day-picker');
+  picker.innerHTML = '';
+  DAY_LABELS.forEach((label, day) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    const active = selectedDays.includes(day);
+    b.setAttribute('aria-pressed', String(active));
+    b.className = 'day-btn' + (active ? ' active' : '');
+    b.textContent = label;
+    b.addEventListener('click', () => {
+      selectedDays = active ? selectedDays.filter((d) => d !== day) : [...selectedDays, day];
+      $('day-warning').classList.add('hidden');
+      renderDayPicker();
+    });
+    picker.appendChild(b);
+  });
+}
+
+function resetForm() {
+  $('med-id').value = '';
+  $('med-name').value = '';
+  $('med-dose').value = '';
+  selectedTime = 'anytime';
+  selectedSchedule = 'daily';
+  selectedDays = [];
+  $('form-title').textContent = 'Add a medication';
+  $('med-save-btn').textContent = 'Add medication';
+  $('med-cancel-btn').classList.add('hidden');
+  renderDoseChips();
+  renderTimePicker();
+  renderSchedulePicker();
+}
+
+$('med-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = $('med-id').value;
+  const name = $('med-name').value.trim();
+  const dose = $('med-dose').value.trim();
+  if (!name || !dose) return;
+
+  if (selectedSchedule === 'weekly' && selectedDays.length === 0) {
+    $('day-warning').classList.remove('hidden');
+    return;
+  }
+
+  const schedule = {
+    type: selectedSchedule,
+    days: selectedSchedule === 'weekly' ? [...selectedDays].sort((a, b) => a - b) : [],
+  };
+
+  if (id) {
+    const med = meds.find((m) => m.id === id);
+    if (med) Object.assign(med, { name, dose, timeOfDay: selectedTime, schedule });
+  } else {
+    meds.push({ id: uid(), name, dose, timeOfDay: selectedTime, schedule });
+  }
+  save(STORE.MEDS, meds);
+  resetForm();
+  renderMedList();
+});
+
+$('med-cancel-btn').addEventListener('click', resetForm);
+
+function renderMedList() {
+  const list = $('med-list');
+  list.innerHTML = '';
+  for (const med of meds) {
+    const group = TIME_GROUPS.find((g) => g.key === (med.timeOfDay || 'anytime'));
+    const li = document.createElement('li');
+    li.className = 'row';
+    li.innerHTML = `
+      <div class="row-main">
+        <p class="row-title">${escapeHtml(med.name)}</p>
+        <p class="row-sub">${escapeHtml(med.dose)} · ${group.icon} ${group.label} · ${scheduleSummary(med)}</p>
+      </div>
+      <div class="row-actions">
+        <button data-edit="${med.id}" aria-label="Edit ${escapeHtml(med.name)}" class="icon-btn">✏️</button>
+        <button data-del="${med.id}" aria-label="Delete ${escapeHtml(med.name)}" class="icon-btn danger">🗑</button>
+      </div>`;
+    list.appendChild(li);
+  }
+
+  for (const el of list.querySelectorAll('[data-edit]')) {
+    el.addEventListener('click', () => {
+      const med = meds.find((m) => m.id === el.dataset.edit);
+      if (!med) return;
+      $('med-id').value = med.id;
+      $('med-name').value = med.name;
+      $('med-dose').value = med.dose;
+      selectedTime = med.timeOfDay || 'anytime';
+      selectedSchedule = (med.schedule || {}).type || 'daily';
+      selectedDays = [...((med.schedule || {}).days || [])];
+      $('form-title').textContent = 'Edit medication';
+      $('med-save-btn').textContent = 'Save changes';
+      $('med-cancel-btn').classList.remove('hidden');
+      renderDoseChips();
+      renderTimePicker();
+      renderSchedulePicker();
+      $('med-name').focus();
+      window.scrollTo(0, 0);
+    });
+  }
+  for (const el of list.querySelectorAll('[data-del]')) {
+    el.addEventListener('click', () => {
+      // Deleting a med keeps its history (logs store their own name/dose copies)
+      meds = meds.filter((m) => m.id !== el.dataset.del);
+      save(STORE.MEDS, meds);
+      renderMedList();
+    });
+  }
+}
+
+/* ================================================================
+   Boot
+   ================================================================ */
+renderTimePicker();
+renderSchedulePicker();
+showView(meds.length ? 'home' : 'settings');
+
+// Refresh the home screen every 30s while visible: keeps the
+// "last taken Xm ago" lines current and rolls the day over at midnight.
+setInterval(() => {
+  if (!$('view-home').classList.contains('hidden')) renderHome();
+}, 30 * 1000);
+
+// Offline support: register the service worker (skipped on file://).
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
+</script>
+</body>
+</html>
