@@ -31,7 +31,7 @@ You can also just open `index.html` directly on a computer — everything works 
 | File | Purpose |
 |---|---|
 | `index.html` | The entire app (UI, styles, logic) |
-| `manifest.webmanifest` | Install metadata (name, icon, standalone display) |
+| `manifest.json` | Install metadata (name, icon, standalone display) |
 | `sw.js` | Service worker — offline caching |
 | `icons/` | App icons (home screen, splash, maskable) |
 
