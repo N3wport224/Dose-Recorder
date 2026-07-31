@@ -4,6 +4,16 @@ A zero-friction medication tracker built for ADHD brains, packaged as an **insta
 
 Plain HTML + CSS + vanilla JavaScript, no frameworks and no build step. All data stays in your browser's LocalStorage — no accounts, no servers, no analytics. Works fully offline once installed.
 
+## Screenshots
+
+| Home | Logging a dose | History |
+|:---:|:---:|:---:|
+| ![Home screen with medications grouped by time of day](screenshots/home-light.png) | ![Confetti, checkmark, and undo toast after one-tap logging](screenshots/logging.png) | ![History with today's log and past days](screenshots/history.png) |
+
+| Settings | Dark mode |
+|:---:|:---:|
+| ![Add-medication form with quick-select dose chips](screenshots/settings.png) | ![Home screen in automatic dark mode](screenshots/home-dark.png) |
+
 ## Put it on your phone (recommended)
 
 1. **Host it** — easiest is GitHub Pages: repo **Settings → Pages → Deploy from a branch → `main` / root**. Your app appears at `https://<username>.github.io/Dose-Recorder/`.
